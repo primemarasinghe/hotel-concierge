@@ -1,0 +1,9 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32
+sqlalchemy==2.0.*
+psycopg[binary]==3.2.*
+pgvector==0.5.*
+pydantic-settings==2.*
+langchain-core>=1.0,<2
+langchain-openai>=1.0,<2
+python-dateutil==2.9.*
