@@ -1,7 +1,8 @@
 import asyncio
+import calendar as cal
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,9 +15,9 @@ from . import email_service as em
 from . import services as svc
 from .agent import ConciergeAgent
 from .config import settings
-from .db import get_db, init_db
-from .models import (Booking, Conversation, Message, Property, RoomType,
-                     TransferRequest)
+from .db import SessionLocal, get_db, init_db
+from .models import (Booking, Conversation, Message, PromoCode, Property, RoomType,
+                     ServiceRequest, TransferRequest)
 from .ratelimit import ip_limiter, lookup_limiter, session_limiter
 
 async def _cleanup_limiters():
@@ -27,16 +28,91 @@ async def _cleanup_limiters():
         lookup_limiter.cleanup()
 
 
+def _dispatch_review_emails() -> int:
+    """Find confirmed bookings that checked out before today and haven't had a review email yet.
+    Sends review request emails and marks them sent. Returns the count sent."""
+    sent = 0
+    try:
+        with SessionLocal() as db:
+            props = db.scalars(select(Property)).all()
+            for prop in props:
+                today = svc.today_at(prop)
+                cutoff = today - timedelta(days=30)
+                rows = db.scalars(
+                    select(Booking).where(
+                        Booking.property_id == prop.id,
+                        Booking.status == "confirmed",
+                        Booking.check_out < today,
+                        Booking.check_out >= cutoff,
+                        Booking.review_email_sent.is_(False),
+                    )
+                ).all()
+                pd = _prop_email_data(prop)
+                for b in rows:
+                    em.review_request(_booking_email_data(b), pd)
+                    b.review_email_sent = True
+                    sent += 1
+                if rows:
+                    db.commit()
+    except Exception as exc:
+        print(f"[review-scheduler] error: {exc}")
+    return sent
+
+
+def _dispatch_pre_arrival_emails() -> int:
+    """Find confirmed bookings checking in within 48h that haven't had a pre-arrival email.
+    Sends pre-arrival emails and marks them sent. Returns the count sent."""
+    sent = 0
+    try:
+        with SessionLocal() as db:
+            props = db.scalars(select(Property)).all()
+            for prop in props:
+                today = svc.today_at(prop)
+                window_end = today + timedelta(days=2)
+                rows = db.scalars(
+                    select(Booking).where(
+                        Booking.property_id == prop.id,
+                        Booking.status == "confirmed",
+                        Booking.check_in > today,
+                        Booking.check_in <= window_end,
+                        Booking.pre_arrival_email_sent.is_(False),
+                    )
+                ).all()
+                pd = _prop_email_data(prop)
+                for b in rows:
+                    em.pre_arrival(_booking_email_data(b), pd)
+                    b.pre_arrival_email_sent = True
+                    sent += 1
+                if rows:
+                    db.commit()
+    except Exception as exc:
+        print(f"[pre-arrival-scheduler] error: {exc}")
+    return sent
+
+
+async def _review_email_scheduler():
+    while True:
+        await asyncio.sleep(3600)  # check every hour
+        n = _dispatch_review_emails()
+        if n:
+            print(f"[review-scheduler] sent {n} review request email(s)")
+        n2 = _dispatch_pre_arrival_emails()
+        if n2:
+            print(f"[pre-arrival-scheduler] sent {n2} pre-arrival email(s)")
+
+
 @asynccontextmanager
 async def lifespan(_app):
     init_db()
-    task = asyncio.create_task(_cleanup_limiters())
+    task1 = asyncio.create_task(_cleanup_limiters())
+    task2 = asyncio.create_task(_review_email_scheduler())
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    for t in (task1, task2):
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="AI Hotel Concierge & Booking Agent", lifespan=lifespan)
@@ -52,6 +128,7 @@ def _prop_email_data(prop: Property) -> dict:
         "accent": contact.get("accent", "#2f5d3a"),
         "phone": contact.get("phone", ""),
         "contact_email": contact.get("email", ""),
+        "contact_review_url": contact.get("review_url", ""),
     }
 
 
@@ -127,16 +204,22 @@ def property_public(prop: Property = Depends(get_property)):
     return {"slug": prop.slug, "name": prop.name, "kind": prop.kind, "location": prop.location,
             "assistant_name": prop.assistant_name, "currency": prop.currency,
             "accent": (prop.contact or {}).get("accent", "#2f5d3a"),
-            "greeting": f"Hello! I'm {prop.assistant_name}, the virtual concierge at {prop.name}. "
-                        "I can check availability and rates, book or change a stay, arrange airport "
-                        "transfers and suggest things to do. How can I help?",
-            "suggestions": ["Do you have a room this weekend?", "Airport transfer prices",
-                            "What can we do nearby?", "Change my booking"]}
+            "greeting": (
+                f"Hello! I'm {prop.assistant_name} 🙏 your AI concierge at {prop.name}. "
+                "How can I help you today?"
+            ),
+            "suggestions": [
+                "Check available rooms",
+                "Book airport transfer",
+                "Things to do in Kandy",
+                "View my booking",
+            ]}
 
 
 class ChatIn(BaseModel):
     session_id: str = Field(min_length=8, max_length=64)
     message: str = Field(min_length=1, max_length=2000)
+    lang: str = Field("en", pattern="^(en|si|ta)$")
 
 
 @app.post("/api/properties/{slug}/chat")
@@ -155,7 +238,7 @@ def chat(request: Request, body: ChatIn, background_tasks: BackgroundTasks,
 
     agent = ConciergeAgent(db, prop, conv)
     try:
-        reply = agent.run(body.message)
+        reply = agent.run(body.message, lang=body.lang)
     except Exception as e:  # LLM/network failure: don't lose the guest
         db.rollback()
         reply = ("Sorry, I'm having trouble right now. Please try again in a moment, or contact us at "
@@ -206,7 +289,7 @@ async def chat_stream(request: Request, body: ChatIn, background_tasks: Backgrou
     async def generate():
         reply_parts: list[str] = []
         try:
-            async for ev in agent.arun_stream(body.message):
+            async for ev in agent.arun_stream(body.message, lang=body.lang):
                 if ev["type"] == "token":
                     reply_parts.append(ev["content"])
                 yield f"data: {json.dumps(ev)}\n\n"
@@ -376,6 +459,57 @@ def admin_summary(prop: Property = Depends(get_property), db: Session = Depends(
         for i in range(14)
     ]
 
+    # ADR / RevPAR / occupancy % (month-to-date)
+    days_elapsed = max((today - first_of_month).days, 1)
+    available_room_nights_mtd = total_units * days_elapsed
+    mtd_bks = db.scalars(select(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_in < today,
+        Booking.check_out > first_of_month,
+    )).all()
+    occupied_room_nights_mtd = sum(
+        (min(b.check_out, today) - max(b.check_in, first_of_month)).days * b.units
+        for b in mtd_bks
+        if min(b.check_out, today) > max(b.check_in, first_of_month)
+    )
+    adr_mtd = round(revenue_mtd / occupied_room_nights_mtd, 2) if occupied_room_nights_mtd else 0
+    revpar_mtd = round(revenue_mtd / available_room_nights_mtd, 2) if available_room_nights_mtd else 0
+    occupancy_pct_mtd = round(occupied_room_nights_mtd / available_room_nights_mtd * 100, 1) if available_room_nights_mtd else 0
+
+    # 6-month revenue trend
+    _M_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    _M_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+    revenue_trend = []
+    for i in range(5, -1, -1):
+        tm = today.month - i
+        ty = today.year
+        while tm <= 0:
+            tm += 12
+            ty -= 1
+        _, tndays = cal.monthrange(ty, tm)
+        mfirst = date(ty, tm, 1)
+        mnext = mfirst + timedelta(days=tndays)
+        rev = float(db.scalar(
+            select(func.coalesce(func.sum(Booking.total_amount), 0)).where(
+                Booking.property_id == prop.id,
+                Booking.status == "confirmed",
+                Booking.check_in >= mfirst,
+                Booking.check_in < mnext,
+            )
+        ) or 0)
+        revenue_trend.append({
+            "month": _M_SHORT[tm - 1],
+            "month_full": f"{_M_FULL[tm - 1]} {ty}",
+            "is_current": ty == today.year and tm == today.month,
+            "revenue": rev,
+        })
+
+    open_service_requests = db.scalar(select(func.count()).select_from(ServiceRequest).where(
+        ServiceRequest.property_id == prop.id,
+        ServiceRequest.status.in_(["open", "in_progress"]),
+    )) or 0
+
     return {
         "today": today.isoformat(), "currency": prop.currency,
         "arrivals_today": sum(1 for b in bookings if b.check_in == today),
@@ -388,10 +522,15 @@ def admin_summary(prop: Property = Depends(get_property), db: Session = Depends(
             TransferRequest.pickup_at.between(now, now + timedelta(hours=48)))),
         "open_handoffs": db.scalar(select(func.count()).select_from(Conversation).where(
             Conversation.property_id == prop.id, Conversation.handoff_requested.is_(True))),
+        "open_service_requests": open_service_requests,
         "occupancy": occupancy,
         "revenue_mtd": revenue_mtd,
         "revenue_next30": revenue_next30,
         "revenue_forecast": revenue_forecast,
+        "adr_mtd": adr_mtd,
+        "revpar_mtd": revpar_mtd,
+        "occupancy_pct_mtd": occupancy_pct_mtd,
+        "revenue_trend": revenue_trend,
     }
 
 
@@ -402,7 +541,8 @@ def admin_bookings(status: str | None = None, prop: Property = Depends(get_prope
         q = q.where(Booking.status == status)
     rows = db.scalars(q.order_by(Booking.check_in.desc()).limit(500)).all()
     return [{**svc.booking_summary(b), "email": b.email, "phone": b.phone, "source": b.source,
-             "created_at": b.created_at.isoformat()} for b in rows]
+             "created_at": b.created_at.isoformat(), "review_email_sent": b.review_email_sent,
+             "pre_arrival_email_sent": b.pre_arrival_email_sent} for b in rows]
 
 
 class StatusIn(BaseModel):
@@ -495,3 +635,218 @@ def admin_resolve(conv_id: str, prop: Property = Depends(get_property), db: Sess
 def admin_rooms(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
     return [{"code": r.code, "name": r.name, "units": r.total_units, "base_rate": r.base_rate}
             for r in db.scalars(select(RoomType).where(RoomType.property_id == prop.id))]
+
+
+def _promo_out(pc: PromoCode) -> dict:
+    return {
+        "id": pc.id, "code": pc.code, "description": pc.description,
+        "discount_type": pc.discount_type, "discount_value": pc.discount_value,
+        "valid_from": pc.valid_from.isoformat() if pc.valid_from else None,
+        "valid_to": pc.valid_to.isoformat() if pc.valid_to else None,
+        "min_nights": pc.min_nights, "max_uses": pc.max_uses,
+        "used_count": pc.used_count, "active": pc.active,
+        "created_at": pc.created_at.isoformat(),
+    }
+
+
+class PromoIn(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+    description: str = Field(default="", max_length=200)
+    discount_type: str = Field(pattern="^(pct|fixed)$")
+    discount_value: float = Field(gt=0)
+    valid_from: str | None = None
+    valid_to: str | None = None
+    min_nights: int = Field(1, ge=1)
+    max_uses: int | None = None
+
+
+@app.get("/api/admin/{slug}/promos", dependencies=[admin])
+def admin_list_promos(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    rows = db.scalars(select(PromoCode).where(PromoCode.property_id == prop.id)
+                      .order_by(PromoCode.created_at.desc())).all()
+    return [_promo_out(p) for p in rows]
+
+
+@app.post("/api/admin/{slug}/promos", dependencies=[admin])
+def admin_create_promo(body: PromoIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    existing = db.scalar(select(PromoCode).where(
+        PromoCode.property_id == prop.id,
+        func.upper(PromoCode.code) == body.code.strip().upper(),
+    ))
+    if existing:
+        raise HTTPException(400, f"Code '{body.code.strip().upper()}' already exists for this property.")
+    pc = PromoCode(
+        property_id=prop.id,
+        code=body.code.strip().upper(),
+        description=body.description.strip(),
+        discount_type=body.discount_type,
+        discount_value=body.discount_value,
+        valid_from=date.fromisoformat(body.valid_from) if body.valid_from else None,
+        valid_to=date.fromisoformat(body.valid_to) if body.valid_to else None,
+        min_nights=body.min_nights,
+        max_uses=body.max_uses,
+        active=True,
+    )
+    db.add(pc)
+    db.commit()
+    return _promo_out(pc)
+
+
+@app.patch("/api/admin/{slug}/promos/{code}/toggle", dependencies=[admin])
+def admin_toggle_promo(code: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    pc = db.scalar(select(PromoCode).where(
+        PromoCode.property_id == prop.id,
+        func.upper(PromoCode.code) == code.strip().upper(),
+    ))
+    if not pc:
+        raise HTTPException(404, "Promo code not found")
+    pc.active = not pc.active
+    db.commit()
+    return _promo_out(pc)
+
+
+# ── Pre-arrival emails ────────────────────────────────────────────────────────
+
+@app.get("/api/admin/{slug}/pre-arrival/pending", dependencies=[admin])
+def admin_pre_arrival_pending(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    today = svc.today_at(prop)
+    window_end = today + timedelta(days=2)
+    count = db.scalar(select(func.count()).select_from(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_in > today,
+        Booking.check_in <= window_end,
+        Booking.pre_arrival_email_sent.is_(False),
+    )) or 0
+    return {"pending": count}
+
+
+@app.post("/api/admin/{slug}/pre-arrival/send", dependencies=[admin])
+def admin_send_pre_arrival(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    today = svc.today_at(prop)
+    window_end = today + timedelta(days=2)
+    rows = db.scalars(select(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_in > today,
+        Booking.check_in <= window_end,
+        Booking.pre_arrival_email_sent.is_(False),
+    )).all()
+    pd = _prop_email_data(prop)
+    for b in rows:
+        em.pre_arrival(_booking_email_data(b), pd)
+        b.pre_arrival_email_sent = True
+    db.commit()
+    return {"sent": len(rows)}
+
+
+# ── Service requests ──────────────────────────────────────────────────────────
+
+def _sr_out(sr: ServiceRequest) -> dict:
+    return {
+        "reference": sr.reference, "category": sr.category, "details": sr.details,
+        "status": sr.status, "guest_name": sr.guest_name, "session_id": sr.session_id,
+        "created_at": sr.created_at.isoformat(), "updated_at": sr.updated_at.isoformat(),
+    }
+
+
+@app.get("/api/admin/{slug}/service-requests", dependencies=[admin])
+def admin_service_requests(status: str | None = None, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    q = select(ServiceRequest).where(ServiceRequest.property_id == prop.id)
+    if status:
+        q = q.where(ServiceRequest.status == status)
+    rows = db.scalars(q.order_by(ServiceRequest.created_at.desc()).limit(200)).all()
+    return [_sr_out(sr) for sr in rows]
+
+
+@app.patch("/api/admin/{slug}/service-requests/{reference}", dependencies=[admin])
+def admin_set_service_request(reference: str, body: StatusIn,
+                               prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    if body.status not in ("open", "in_progress", "done"):
+        raise HTTPException(400, "Invalid status")
+    sr = db.scalar(select(ServiceRequest).where(
+        ServiceRequest.property_id == prop.id, ServiceRequest.reference == reference))
+    if not sr:
+        raise HTTPException(404, "Service request not found")
+    sr.status = body.status
+    db.commit()
+    return _sr_out(sr)
+
+
+# ── Booking calendar ──────────────────────────────────────────────────────────
+
+@app.get("/api/admin/{slug}/calendar", dependencies=[admin])
+def admin_calendar(year: int | None = None, month: int | None = None,
+                   prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    today = svc.today_at(prop)
+    y = year or today.year
+    m = month or today.month
+    _, ndays = cal.monthrange(y, m)
+    first = date(y, m, 1)
+    last = date(y, m, ndays)
+    total_units = sum(r.total_units for r in prop.room_types)
+
+    bookings = db.scalars(select(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status != "cancelled",
+        Booking.check_in <= last,
+        Booking.check_out > first,
+    )).all()
+
+    def _bk(b):
+        return {"reference": b.reference, "guest_name": b.guest_name,
+                "room": b.room_type.name, "nights": (b.check_out - b.check_in).days,
+                "status": b.status}
+
+    days = []
+    for i in range(ndays):
+        d = date(y, m, i + 1)
+        occupied = sum(b.units for b in bookings if b.check_in <= d < b.check_out)
+        days.append({
+            "date": d.isoformat(),
+            "occupied": occupied,
+            "arrivals":   [_bk(b) for b in bookings if b.check_in == d],
+            "departures": [_bk(b) for b in bookings if b.check_out == d],
+            "inhouse":    [_bk(b) for b in bookings if b.check_in < d < b.check_out],
+            "occupancy_pct": round(occupied / total_units * 100) if total_units else 0,
+        })
+
+    return {"year": y, "month": m, "total_units": total_units, "days": days}
+
+
+# ── Review email scheduler ────────────────────────────────────────────────────
+
+def _pending_reviews_count(db, prop: Property) -> int:
+    today = svc.today_at(prop)
+    cutoff = today - timedelta(days=30)
+    return db.scalar(select(func.count()).select_from(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_out < today,
+        Booking.check_out >= cutoff,
+        Booking.review_email_sent.is_(False),
+    )) or 0
+
+
+@app.get("/api/admin/{slug}/reviews/pending", dependencies=[admin])
+def admin_reviews_pending(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    return {"pending": _pending_reviews_count(db, prop)}
+
+
+@app.post("/api/admin/{slug}/reviews/send", dependencies=[admin])
+def admin_send_reviews(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    today = svc.today_at(prop)
+    cutoff = today - timedelta(days=30)
+    rows = db.scalars(select(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_out < today,
+        Booking.check_out >= cutoff,
+        Booking.review_email_sent.is_(False),
+    )).all()
+    pd = _prop_email_data(prop)
+    for b in rows:
+        em.review_request(_booking_email_data(b), pd)
+        b.review_email_sent = True
+    db.commit()
+    return {"sent": len(rows)}

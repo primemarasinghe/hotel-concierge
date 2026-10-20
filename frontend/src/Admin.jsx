@@ -229,6 +229,47 @@ function RevenueForecast({ days, currency }) {
   );
 }
 
+// ── 6-month revenue trend chart ───────────────────────────────────────────────
+function RevenueTrend({ months, currency }) {
+  const [hover, setHover] = useState(null);
+  const max = Math.max(...months.map(m => m.revenue), 1);
+  return (
+    <figure className="rev-chart">
+      <figcaption>
+        <strong>Revenue trend — last 6 months</strong>
+        <span>confirmed bookings by check-in month</span>
+      </figcaption>
+      <div className="rev-plot" onMouseLeave={() => setHover(null)}>
+        {months.map((m, i) => {
+          const pct = (m.revenue / max) * 100;
+          return (
+            <button
+              key={m.month_full}
+              className="rev-col"
+              onMouseEnter={() => setHover(i)}
+              onFocus={() => setHover(i)}
+              onBlur={() => setHover(null)}
+              aria-label={`${m.month_full}: ${money(m.revenue, currency)}`}
+            >
+              <span className="rev-bar" style={{
+                height: `${Math.max(pct, m.revenue ? 4 : 0)}%`,
+                opacity: m.is_current ? 1 : 0.65,
+              }}/>
+              <span className="rev-x" style={{ fontWeight: m.is_current ? 700 : 400 }}>{m.month}</span>
+              {hover === i && m.revenue > 0 && (
+                <span className="rev-tip" role="tooltip">
+                  {m.month_full}
+                  <b>{money(m.revenue, currency)}</b>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </figure>
+  );
+}
+
 // ── Overview ──────────────────────────────────────────────────────────────────
 function Overview({ a, slug, goTo }) {
   const [s, setS] = useState(null);
@@ -245,6 +286,9 @@ function Overview({ a, slug, goTo }) {
         <StatCard iconKey="pending"    value={s.pending}          label="Awaiting confirmation" action="Confirm now" onClick={() => goTo("bookings")} urgent={s.pending > 0} />
         <StatCard iconKey="transfers"  value={s.transfers_48h}    label="Transfers in 48 h"    action="Review"      onClick={() => goTo("transfers")} />
         <StatCard iconKey="handoffs"   value={s.open_handoffs}    label="Guests asking for staff" action="View"     onClick={() => goTo("conversations")} urgent={s.open_handoffs > 0} />
+        {s.open_service_requests > 0 && (
+          <StatCard iconKey="handoffs" value={s.open_service_requests} label="Open service requests" action="View" onClick={() => goTo("requests")} urgent />
+        )}
       </div>
 
       <Occupancy days={s.occupancy} />
@@ -252,7 +296,7 @@ function Overview({ a, slug, goTo }) {
       <div className="rev-section">
         <div className="rev-section-head">
           <h3>Revenue</h3>
-          <span>booking totals by check-in date</span>
+          <span>month-to-date confirmed bookings</span>
         </div>
         <div className="rev-kpis">
           <div className="rev-kpi">
@@ -265,8 +309,27 @@ function Overview({ a, slug, goTo }) {
             <span className="rev-kpi-value">{money(s.revenue_next30, s.currency)}</span>
             <span className="rev-kpi-sub">confirmed + pending</span>
           </div>
+          <div className="rev-kpi">
+            <span className="rev-kpi-label">ADR (MTD)</span>
+            <span className="rev-kpi-value">{money(s.adr_mtd, s.currency)}</span>
+            <span className="rev-kpi-sub">avg daily rate</span>
+          </div>
+          <div className="rev-kpi">
+            <span className="rev-kpi-label">RevPAR (MTD)</span>
+            <span className="rev-kpi-value">{money(s.revpar_mtd, s.currency)}</span>
+            <span className="rev-kpi-sub">rev per available room</span>
+          </div>
+          <div className="rev-kpi">
+            <span className="rev-kpi-label">Occupancy (MTD)</span>
+            <span className="rev-kpi-value">{s.occupancy_pct_mtd ?? 0}%</span>
+            <span className="rev-kpi-sub">room nights sold</span>
+          </div>
         </div>
-        <RevenueForecast days={s.revenue_forecast} currency={s.currency} />
+        {s.revenue_trend && s.revenue_trend.some(m => m.revenue > 0) ? (
+          <RevenueTrend months={s.revenue_trend} currency={s.currency} />
+        ) : (
+          <RevenueForecast days={s.revenue_forecast} currency={s.currency} />
+        )}
       </div>
     </>
   );
@@ -370,12 +433,41 @@ function Bookings({ a, slug, toast, onRefresh }) {
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
+  const [pendingReviews, setPendingReviews] = useState(0);
+  const [sendingReviews, setSendingReviews] = useState(false);
+  const [pendingPreArrival, setPendingPreArrival] = useState(0);
+  const [sendingPreArrival, setSendingPreArrival] = useState(false);
 
   const load = useCallback(() => {
     setRows(null);
     a.bookings(slug, filter).then(setRows).catch(() => setRows([]));
   }, [a, slug, filter]);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    a.reviewsPending(slug).then(r => setPendingReviews(r.pending)).catch(() => {});
+    a.preArrivalPending(slug).then(r => setPendingPreArrival(r.pending)).catch(() => {});
+  }, [a, slug]);
+
+  async function sendReviewEmails() {
+    setSendingReviews(true);
+    try {
+      const r = await a.sendReviews(slug);
+      toast.success(r.sent > 0 ? `${r.sent} review email${r.sent !== 1 ? "s" : ""} sent` : "No pending review emails");
+      if (r.sent > 0) { setPendingReviews(0); load(); }
+    } catch (e) { toast.error(`Failed: ${e.message}`); }
+    finally { setSendingReviews(false); }
+  }
+
+  async function sendPreArrivalEmails() {
+    setSendingPreArrival(true);
+    try {
+      const r = await a.sendPreArrival(slug);
+      toast.success(r.sent > 0 ? `${r.sent} pre-arrival email${r.sent !== 1 ? "s" : ""} sent` : "No pending pre-arrival emails");
+      if (r.sent > 0) { setPendingPreArrival(0); load(); }
+    } catch (e) { toast.error(`Failed: ${e.message}`); }
+    finally { setSendingPreArrival(false); }
+  }
 
   async function setStatus(ref, status) {
     try {
@@ -441,9 +533,41 @@ function Bookings({ a, slug, toast, onRefresh }) {
             onChange={e => setSearch(e.target.value)}
           />
         </label>
+        {pendingPreArrival > 0 && (
+          <button className="adm-btn adm-btn-ghost-sm" onClick={sendPreArrivalEmails} disabled={sendingPreArrival}
+            title={`Send pre-arrival emails to ${pendingPreArrival} guest${pendingPreArrival !== 1 ? "s" : ""} arriving in 48 hours`}>
+            {sendingPreArrival ? <><span className="adm-spinner"/><span>Sending…</span></> : (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
+                <span>Pre-arrival emails ({pendingPreArrival})</span>
+              </>
+            )}
+          </button>
+        )}
+        {pendingReviews > 0 && (
+          <button
+            className="adm-btn adm-btn-ghost-sm"
+            onClick={sendReviewEmails}
+            disabled={sendingReviews}
+            title={`Send review request emails to ${pendingReviews} guest${pendingReviews !== 1 ? "s" : ""} who checked out recently`}
+          >
+            {sendingReviews ? (
+              <><span className="adm-spinner" /><span>Sending…</span></>
+            ) : (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
+                <span>Send review emails ({pendingReviews})</span>
+              </>
+            )}
+          </button>
+        )}
         <button
           className="adm-btn adm-btn-ghost-sm"
-          style={{ marginLeft: "auto" }}
+          style={{ marginLeft: (pendingReviews > 0 || pendingPreArrival > 0) ? 0 : "auto" }}
           disabled={!filtered.length}
           onClick={() => {
             const tag = filter || "all";
@@ -498,6 +622,18 @@ function Bookings({ a, slug, toast, onRefresh }) {
                   <td>
                     <Status value={b.status}/>
                     {b.special_requests && <small title={b.special_requests} style={{ cursor: "help" }}>Has requests</small>}
+                    {b.pre_arrival_email_sent && (
+                      <small title="Pre-arrival email sent" style={{ color: "#3b82f6", display: "flex", alignItems: "center", gap: 3 }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        Pre-arrival sent
+                      </small>
+                    )}
+                    {b.review_email_sent && (
+                      <small title="Review request email sent" style={{ color: "var(--accent)", display: "flex", alignItems: "center", gap: 3 }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        Review sent
+                      </small>
+                    )}
                   </td>
                   <td className="actions">
                     {b.status === "pending" && (
@@ -679,12 +815,430 @@ function Conversations({ a, slug, onChange }) {
   );
 }
 
+// ── Service Requests tab ──────────────────────────────────────────────────────
+const SR_CATEGORY_LABEL = {
+  housekeeping: "Housekeeping", room_service: "Room Service", maintenance: "Maintenance",
+  late_checkout: "Late Checkout", early_checkin: "Early Check-in", concierge: "Concierge", other: "Other",
+};
+const SR_CATEGORY_COLOR = {
+  housekeeping: "#f59e0b", room_service: "#f97316", maintenance: "#ef4444",
+  late_checkout: "#3b82f6", early_checkin: "#3b82f6", concierge: "var(--accent)", other: "#6b7280",
+};
+const SR_STATUS_LABEL = { open: "Open", in_progress: "In progress", done: "Done" };
+
+function ServiceRequests({ a, slug, toast, onRefresh }) {
+  const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState("open");
+
+  const load = useCallback(() => {
+    setRows(null);
+    a.serviceRequests(slug, filter || undefined).then(setRows).catch(() => setRows([]));
+  }, [a, slug, filter]);
+  useEffect(() => { load(); }, [load]);
+
+  async function setStatus(ref, status) {
+    try {
+      await a.setServiceRequest(slug, ref, status);
+      toast.success(`Request ${ref} marked ${SR_STATUS_LABEL[status]}`);
+      load();
+      onRefresh?.();
+    } catch (e) { toast.error(e.message); }
+  }
+
+  function timeSinceISO(iso) {
+    const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  }
+
+  return (
+    <>
+      <div className="adm-toolbar">
+        <div className="seg" role="tablist" aria-label="Filter requests">
+          {[["open","Open"],["in_progress","In progress"],["done","Done"],["","All"]].map(([v,l]) => (
+            <button key={l} role="tab" aria-selected={filter===v} onClick={() => setFilter(v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {!rows ? (
+        <div className="adm-loading">Loading service requests…</div>
+      ) : rows.length === 0 ? (
+        <p className="empty">No service requests{filter ? ` with status "${SR_STATUS_LABEL[filter] || filter}"` : ""}. Guests can make in-stay requests via the concierge chat.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr><th>Reference</th><th>Category</th><th>Guest</th><th>Request</th><th>Status</th><th>Time</th><th/></tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.reference} className={r.status === "open" ? "row-pending" : ""}>
+                  <td className="ref">{r.reference}</td>
+                  <td>
+                    <span style={{
+                      display: "inline-block", padding: "2px 8px", borderRadius: 99,
+                      fontSize: "0.75rem", fontWeight: 600,
+                      background: `${SR_CATEGORY_COLOR[r.category]}22`,
+                      color: SR_CATEGORY_COLOR[r.category],
+                    }}>
+                      {SR_CATEGORY_LABEL[r.category] || r.category}
+                    </span>
+                  </td>
+                  <td>{r.guest_name || <span style={{color:"var(--muted)"}}>Unknown</span>}</td>
+                  <td style={{maxWidth: 260, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{r.details}</td>
+                  <td><Status value={r.status === "done" ? "confirmed" : r.status === "in_progress" ? "pending" : "pending"} />&nbsp;<small>{SR_STATUS_LABEL[r.status]}</small></td>
+                  <td style={{color:"var(--muted)",fontSize:"0.8rem"}}>{timeSinceISO(r.created_at)}</td>
+                  <td className="actions">
+                    {r.status === "open" && (
+                      <button className="adm-icon-btn adm-icon-btn-confirm" title="Mark in progress"
+                        onClick={() => setStatus(r.reference, "in_progress")}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                      </button>
+                    )}
+                    {r.status !== "done" && (
+                      <button className="adm-icon-btn adm-icon-btn-confirm" title="Mark done"
+                        onClick={() => setStatus(r.reference, "done")}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Calendar tab ──────────────────────────────────────────────────────────────
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const WEEK_DAYS   = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+function CalendarView({ a, slug }) {
+  const now = new Date();
+  const [year,  setYear]  = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [data,  setData]  = useState(null);
+  const [sel,   setSel]   = useState(null);
+
+  useEffect(() => {
+    setData(null);
+    a.calendar(slug, year, month).then(setData).catch(() => setData({ days: [], total_units: 0 }));
+  }, [a, slug, year, month]);
+
+  function prevMonth() {
+    if (month === 1) { setYear(y => y - 1); setMonth(12); } else setMonth(m => m - 1);
+    setSel(null);
+  }
+  function nextMonth() {
+    if (month === 12) { setYear(y => y + 1); setMonth(1); } else setMonth(m => m + 1);
+    setSel(null);
+  }
+
+  const todayStr = now.toISOString().slice(0, 10);
+  const firstDow = data ? (new Date(year, month - 1, 1).getDay() + 6) % 7 : 0; // Mon=0
+  const selDay   = data?.days.find(d => d.date === sel);
+
+  if (!data) return <div className="adm-loading">Loading calendar…</div>;
+
+  return (
+    <div className="cal-wrap">
+      <div className="cal-header">
+        <button className="adm-btn adm-btn-ghost-sm" onClick={prevMonth}>← Prev</button>
+        <h3 className="cal-title">{MONTH_NAMES[month - 1]} {year}</h3>
+        <button className="adm-btn adm-btn-ghost-sm" onClick={nextMonth}>Next →</button>
+      </div>
+
+      <div className="cal-grid">
+        {WEEK_DAYS.map(d => <div key={d} className="cal-weekday">{d}</div>)}
+        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} className="cal-day cal-day-empty" />)}
+        {data.days.map(day => {
+          const num  = parseInt(day.date.slice(8), 10);
+          const pct  = data.total_units > 0 ? day.occupied / data.total_units : 0;
+          const isToday = day.date === todayStr;
+          const isSel   = day.date === sel;
+          return (
+            <button
+              key={day.date}
+              className={`cal-day${isToday ? " cal-today" : ""}${isSel ? " cal-selected" : ""}`}
+              onClick={() => setSel(isSel ? null : day.date)}
+            >
+              <span className="cal-day-num">{num}</span>
+              {day.occupied > 0 && (
+                <div className="cal-occ-fill" style={{ height: `${Math.max(pct * 100, 8)}%` }} />
+              )}
+              {day.arrivals?.length > 0 && (
+                <span className="cal-arrival-badge">{day.arrivals.length}</span>
+              )}
+              <span className="cal-occ-txt">{day.occupied}/{data.total_units}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selDay && (
+        <div className="cal-detail">
+          <div className="cal-detail-head">
+            <strong>{fmtDate(selDay.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</strong>
+            <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+              {selDay.occupied}/{data.total_units} units occupied
+            </span>
+          </div>
+          {selDay.arrivals?.length > 0 && (
+            <div className="cal-detail-section">
+              <span className="cal-section-lbl">Check-ins ({selDay.arrivals.length})</span>
+              {selDay.arrivals.map(b => (
+                <div key={b.reference} className="cal-booking-row">
+                  <span className="ref">{b.reference}</span>
+                  <span>{b.guest_name}</span>
+                  <small>{b.room} · {b.nights}n</small>
+                  <Status value={b.status} />
+                </div>
+              ))}
+            </div>
+          )}
+          {selDay.inhouse?.length > 0 && (
+            <div className="cal-detail-section">
+              <span className="cal-section-lbl">In house ({selDay.inhouse.length})</span>
+              {selDay.inhouse.map(b => (
+                <div key={b.reference} className="cal-booking-row">
+                  <span className="ref">{b.reference}</span>
+                  <span>{b.guest_name}</span>
+                  <small>{b.room}</small>
+                </div>
+              ))}
+            </div>
+          )}
+          {selDay.departures?.length > 0 && (
+            <div className="cal-detail-section">
+              <span className="cal-section-lbl">Check-outs ({selDay.departures.length})</span>
+              {selDay.departures.map(b => (
+                <div key={b.reference} className="cal-booking-row">
+                  <span className="ref">{b.reference}</span>
+                  <span>{b.guest_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!selDay.arrivals?.length && !selDay.inhouse?.length && !selDay.departures?.length && (
+            <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "12px 0 0" }}>No bookings on this day.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Promo Codes tab ───────────────────────────────────────────────────────────
+const EMPTY_PROMO = { code: "", description: "", discount_type: "pct", discount_value: "", valid_from: "", valid_to: "", min_nights: 1, max_uses: "" };
+
+function PromoCodes({ a, slug, toast }) {
+  const [rows, setRows] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState(EMPTY_PROMO);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(() => {
+    setRows(null);
+    a.promos(slug).then(setRows).catch(() => setRows([]));
+  }, [a, slug]);
+  useEffect(() => { load(); }, [load]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    if (!form.code.trim() || !form.discount_value) return;
+    setSaving(true);
+    try {
+      const body = {
+        code: form.code.trim().toUpperCase(),
+        description: form.description.trim(),
+        discount_type: form.discount_type,
+        discount_value: parseFloat(form.discount_value),
+        valid_from: form.valid_from || null,
+        valid_to: form.valid_to || null,
+        min_nights: parseInt(form.min_nights) || 1,
+        max_uses: form.max_uses ? parseInt(form.max_uses) : null,
+      };
+      await a.createPromo(slug, body);
+      toast.success(`Code ${body.code} created`);
+      setCreating(false);
+      setForm(EMPTY_PROMO);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggle(code) {
+    try {
+      await a.togglePromo(slug, code);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  function discountLabel(p) {
+    return p.discount_type === "pct"
+      ? `${p.discount_value}% off`
+      : `${Number(p.discount_value).toLocaleString()} off`;
+  }
+
+  function validLabel(p) {
+    if (!p.valid_from && !p.valid_to) return "Any time";
+    if (p.valid_from && p.valid_to) return `${fmtDate(p.valid_from)} – ${fmtDate(p.valid_to)}`;
+    if (p.valid_from) return `From ${fmtDate(p.valid_from)}`;
+    return `Until ${fmtDate(p.valid_to)}`;
+  }
+
+  const activeCount = (rows || []).filter(r => r.active).length;
+
+  return (
+    <>
+      <div className="adm-toolbar">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>Promo Codes</span>
+          {rows && activeCount > 0 && (
+            <span className="badge badge-amber">{activeCount} active</span>
+          )}
+        </div>
+        <button
+          className="adm-btn adm-btn-primary"
+          style={{ marginLeft: "auto" }}
+          onClick={() => { setCreating(c => !c); setForm(EMPTY_PROMO); }}
+        >
+          {creating ? "Cancel" : "+ New code"}
+        </button>
+      </div>
+
+      {creating && (
+        <form className="promo-form" onSubmit={handleCreate}>
+          <div className="promo-form-grid">
+            <div className="adm-field">
+              <label htmlFor="pf-code">Code *</label>
+              <input
+                id="pf-code" required
+                placeholder="e.g. KANDY10"
+                value={form.code}
+                onChange={e => set("code", e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
+                style={{ fontFamily: "monospace", letterSpacing: "0.05em" }}
+              />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-desc">Description</label>
+              <input
+                id="pf-desc"
+                placeholder="Shown to guest as discount label"
+                value={form.description}
+                onChange={e => set("description", e.target.value)}
+              />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-type">Type *</label>
+              <select id="pf-type" value={form.discount_type} onChange={e => set("discount_type", e.target.value)}>
+                <option value="pct">Percentage (%)</option>
+                <option value="fixed">Fixed amount</option>
+              </select>
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-val">{form.discount_type === "pct" ? "Discount %" : "Discount amount"} *</label>
+              <input
+                id="pf-val" required type="number" min="0.01" step="0.01"
+                placeholder={form.discount_type === "pct" ? "e.g. 10" : "e.g. 2000"}
+                value={form.discount_value}
+                onChange={e => set("discount_value", e.target.value)}
+              />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-from">Valid from</label>
+              <input id="pf-from" type="date" value={form.valid_from} onChange={e => set("valid_from", e.target.value)} />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-to">Valid to</label>
+              <input id="pf-to" type="date" value={form.valid_to} onChange={e => set("valid_to", e.target.value)} />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-nights">Min nights</label>
+              <input id="pf-nights" type="number" min="1" value={form.min_nights} onChange={e => set("min_nights", e.target.value)} />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-uses">Max uses (blank = unlimited)</label>
+              <input id="pf-uses" type="number" min="1" placeholder="Unlimited" value={form.max_uses} onChange={e => set("max_uses", e.target.value)} />
+            </div>
+          </div>
+          <div className="promo-form-actions">
+            <button type="button" className="adm-btn adm-btn-ghost-sm" onClick={() => setCreating(false)}>Cancel</button>
+            <button type="submit" className="adm-btn adm-btn-primary" disabled={saving}>
+              {saving ? <><span className="adm-spinner" /><span>Creating…</span></> : "Create code"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!rows ? (
+        <div className="adm-loading">Loading promo codes…</div>
+      ) : rows.length === 0 ? (
+        <p className="empty">No promo codes yet. Click "+ New code" to create one and offer guests a discount.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Code</th><th>Description</th><th className="num">Discount</th>
+                <th>Valid</th><th className="num">Min nights</th>
+                <th className="num">Uses</th><th>Status</th><th/>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(p => (
+                <tr key={p.code} style={{ opacity: p.active ? 1 : 0.5 }}>
+                  <td className="ref" style={{ fontFamily: "monospace", letterSpacing: "0.05em" }}>{p.code}</td>
+                  <td>{p.description || <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                  <td className="num" style={{ fontWeight: 600, color: "var(--accent)" }}>{discountLabel(p)}</td>
+                  <td style={{ fontSize: "0.8rem" }}>{validLabel(p)}</td>
+                  <td className="num">{p.min_nights}</td>
+                  <td className="num">{p.used_count}{p.max_uses != null ? `/${p.max_uses}` : ""}</td>
+                  <td>
+                    <span className={`status status-${p.active ? "confirmed" : "cancelled"}`}>
+                      {p.active ? "Active" : "Paused"}
+                    </span>
+                  </td>
+                  <td className="actions">
+                    <button
+                      className="adm-btn adm-btn-ghost-sm"
+                      onClick={() => toggle(p.code)}
+                      title={p.active ? "Pause this code" : "Re-activate this code"}
+                    >
+                      {p.active ? "Pause" : "Activate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Admin shell ───────────────────────────────────────────────────────────────
 const TABS = [
   ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
   ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
   ["transfers",     "Transfers",     "M17 8l4 4-4 4M3 12h18"],
   ["conversations", "Conversations", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
+  ["promos",        "Promo Codes",   "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
+  ["requests",      "Requests",      "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"],
+  ["calendar",      "Calendar",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
 ];
 
 export default function Admin() {
@@ -695,6 +1249,7 @@ export default function Admin() {
   const [tab,         setTab]         = useState("overview");
   const [handoffs,    setHandoffs]    = useState(0);
   const [pending,     setPending]     = useState(0);
+  const [openSRs,     setOpenSRs]     = useState(0);
   const [currency,    setCurrency]    = useState("USD");
   const [lastRefresh, setLastRefresh] = useState(null);
   const [refreshing,  setRefreshing]  = useState(false);
@@ -707,6 +1262,7 @@ export default function Admin() {
     a.summary(slug).then(s => {
       setHandoffs(s.open_handoffs);
       setPending(s.pending);
+      setOpenSRs(s.open_service_requests ?? 0);
       setLastRefresh(Date.now());
     }).catch(() => {});
   }, [a, slug]);
@@ -820,8 +1376,9 @@ export default function Admin() {
                 <path d={iconPath}/>
               </svg>
               <span>{label}</span>
-              {id === "bookings"      && pending  > 0 && <span className="badge badge-amber">{pending}</span>}
-              {id === "conversations" && handoffs > 0  && <span className="badge">{handoffs}</span>}
+              {id === "bookings"      && pending   > 0 && <span className="badge badge-amber">{pending}</span>}
+              {id === "conversations" && handoffs  > 0 && <span className="badge">{handoffs}</span>}
+              {id === "requests"      && openSRs   > 0 && <span className="badge badge-red">{openSRs}</span>}
             </button>
           ))}
         </nav>
@@ -865,7 +1422,10 @@ export default function Admin() {
           {slug && tab === "overview"      && <Overview      a={a} slug={slug} goTo={setTab}/>}
           {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "transfers"     && <Transfers     a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
-          {slug && tab === "conversations" && <Conversations a={a} slug={slug} onChange={refreshBadges}/>}
+          {slug && tab === "conversations" && <Conversations   a={a} slug={slug} onChange={refreshBadges}/>}
+          {slug && tab === "promos"        && <PromoCodes      a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "requests"      && <ServiceRequests a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
+          {slug && tab === "calendar"      && <CalendarView    a={a} slug={slug}/>}
         </main>
       </div>
     </div>

@@ -43,6 +43,19 @@ export const api = {
     conversation: (slug, id) => request(`/api/admin/${slug}/conversations/${id}`, { token }),
     resolve: (slug, id) =>
       request(`/api/admin/${slug}/conversations/${id}/resolve`, { method: "POST", token }),
+    promos: (slug) => request(`/api/admin/${slug}/promos`, { token }),
+    createPromo: (slug, body) => request(`/api/admin/${slug}/promos`, { method: "POST", body, token }),
+    togglePromo: (slug, code) => request(`/api/admin/${slug}/promos/${code}/toggle`, { method: "PATCH", token }),
+    reviewsPending: (slug) => request(`/api/admin/${slug}/reviews/pending`, { token }),
+    sendReviews: (slug) => request(`/api/admin/${slug}/reviews/send`, { method: "POST", token }),
+    preArrivalPending: (slug) => request(`/api/admin/${slug}/pre-arrival/pending`, { token }),
+    sendPreArrival: (slug) => request(`/api/admin/${slug}/pre-arrival/send`, { method: "POST", token }),
+    serviceRequests: (slug, status) =>
+      request(`/api/admin/${slug}/service-requests${status ? `?status=${status}` : ""}`, { token }),
+    setServiceRequest: (slug, ref, status) =>
+      request(`/api/admin/${slug}/service-requests/${ref}`, { method: "PATCH", body: { status }, token }),
+    calendar: (slug, year, month) =>
+      request(`/api/admin/${slug}/calendar?year=${year}&month=${month}`, { token }),
   }),
 };
 
@@ -50,11 +63,11 @@ export const api = {
  * Async generator for the SSE streaming chat endpoint.
  * Yields objects: {type:"token",content} | {type:"event",event} | {type:"done"} | {type:"error",message}
  */
-export async function* chatStream(slug, sid, message) {
+export async function* chatStream(slug, sid, message, lang = "en") {
   const res = await fetch(`${BASE}/api/properties/${slug}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sid, message }),
+    body: JSON.stringify({ session_id: sid, message, lang }),
   });
 
   if (!res.ok) {

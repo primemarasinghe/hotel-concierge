@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .models import (Booking, Experience, Property, RoomType, SeasonalRate,
-                     TransferOption, TransferRequest)
+from .models import (Booking, Experience, PromoCode, Property, RoomType,
+                     SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
 
 REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
 CHILD_MEAL_FACTOR = 0.5
@@ -58,6 +58,26 @@ def validate_occupancy(rt: RoomType, adults: int, children: int, units: int) -> 
         )
 
 
+def validate_promo(db: Session, prop: Property, code: str, nights: int) -> PromoCode:
+    pc = db.scalar(select(PromoCode).where(
+        PromoCode.property_id == prop.id,
+        func.upper(PromoCode.code) == code.strip().upper(),
+        PromoCode.active.is_(True),
+    ))
+    if not pc:
+        raise BookingError(f"Promo code '{code.strip().upper()}' is not valid.")
+    today = today_at(prop)
+    if pc.valid_from and today < pc.valid_from:
+        raise BookingError(f"Code '{pc.code}' is not active yet — it starts on {pc.valid_from}.")
+    if pc.valid_to and today > pc.valid_to:
+        raise BookingError(f"Code '{pc.code}' has expired.")
+    if pc.max_uses is not None and pc.used_count >= pc.max_uses:
+        raise BookingError(f"Code '{pc.code}' has reached its usage limit.")
+    if nights < pc.min_nights:
+        raise BookingError(f"Code '{pc.code}' requires a minimum stay of {pc.min_nights} nights.")
+    return pc
+
+
 def room_type_by_code(db: Session, prop: Property, code: str) -> RoomType:
     rt = db.scalar(select(RoomType).where(RoomType.property_id == prop.id,
                                           func.lower(RoomType.code) == code.strip().lower()))
@@ -88,7 +108,8 @@ def units_available(db: Session, rt: RoomType, check_in: date, check_out: date,
 
 
 def quote(db: Session, prop: Property, rt: RoomType, check_in: date, check_out: date,
-          adults: int, children: int = 0, units: int = 1, meal_plan: str = "RO") -> dict:
+          adults: int, children: int = 0, units: int = 1, meal_plan: str = "RO",
+          promo_code: str | None = None) -> dict:
     meal_plan = (meal_plan or "RO").upper()
     if meal_plan not in (prop.meal_plans or {"RO": 0}):
         raise BookingError(f"Meal plan '{meal_plan}' not offered. Options: {', '.join(prop.meal_plans)}.")
@@ -113,16 +134,36 @@ def quote(db: Session, prop: Property, rt: RoomType, check_in: date, check_out: 
     if n < min_nights_required:
         raise BookingError(f"A minimum stay of {min_nights_required} nights applies for these dates.")
     subtotal = sum(x["room"] + x["meals"] for x in nightly)
-    service = subtotal * prop.service_charge_pct / 100
-    tax = (subtotal + service) * prop.tax_pct / 100
-    return {
+
+    promo_discount = 0.0
+    promo_label = None
+    if promo_code:
+        pc = validate_promo(db, prop, promo_code, n)
+        if pc.discount_type == "pct":
+            promo_discount = round(subtotal * pc.discount_value / 100, 2)
+        else:
+            promo_discount = round(min(pc.discount_value, subtotal), 2)
+        promo_label = pc.description or (
+            f"{pc.discount_value}% off" if pc.discount_type == "pct"
+            else f"{prop.currency} {pc.discount_value:,.0f} off"
+        )
+
+    discounted = subtotal - promo_discount
+    service = discounted * prop.service_charge_pct / 100
+    tax = (discounted + service) * prop.tax_pct / 100
+    result = {
         "room_type": rt.code, "room_name": rt.name, "nights": n, "units": units,
         "meal_plan": meal_plan, "currency": prop.currency,
         "nightly": nightly,
         "subtotal": round(subtotal, 2), "service_charge": round(service, 2),
-        "taxes": round(tax, 2), "total": round(subtotal + service + tax, 2),
-        "avg_per_night": round((subtotal + service + tax) / n, 2),
+        "taxes": round(tax, 2), "total": round(discounted + service + tax, 2),
+        "avg_per_night": round((discounted + service + tax) / n, 2),
     }
+    if promo_discount:
+        result["promo_code"] = promo_code.strip().upper()
+        result["promo_discount"] = promo_discount
+        result["promo_label"] = promo_label
+    return result
 
 
 def units_needed(rt: RoomType, adults: int, children: int) -> int | None:
@@ -165,7 +206,7 @@ def search_availability(db: Session, prop: Property, check_in: date, check_out: 
 def create_booking(db: Session, prop: Property, *, room_type_code: str, check_in: date, check_out: date,
                    adults: int, guest_name: str, children: int = 0, units: int = 1, meal_plan: str = "RO",
                    email: str, phone: str, special_requests: str = "", session_id: str | None = None,
-                   source: str = "chat") -> Booking:
+                   source: str = "chat", promo_code: str | None = None) -> Booking:
     validate_stay(prop, check_in, check_out)
     rt = room_type_by_code(db, prop, room_type_code)
     validate_occupancy(rt, adults, children, units)
@@ -178,7 +219,7 @@ def create_booking(db: Session, prop: Property, *, room_type_code: str, check_in
         db.execute(select(RoomType).where(RoomType.id == rt.id).with_for_update())
         if units_available(db, rt, check_in, check_out) < units:
             raise BookingError(f"Sorry, {rt.name} is no longer available for those dates.")
-        q = quote(db, prop, rt, check_in, check_out, adults, children, units, meal_plan)
+        q = quote(db, prop, rt, check_in, check_out, adults, children, units, meal_plan, promo_code)
     except BookingError:
         db.rollback()
         raise
@@ -188,8 +229,17 @@ def create_booking(db: Session, prop: Property, *, room_type_code: str, check_in
         check_in=check_in, check_out=check_out, adults=adults, children=children, units=units,
         meal_plan=q["meal_plan"], total_amount=q["total"], currency=prop.currency,
         status="pending", special_requests=special_requests.strip(), source=source, session_id=session_id,
+        promo_code=promo_code.strip().upper() if promo_code else None,
+        discount_amount=q.get("promo_discount", 0),
     )
     db.add(booking)
+    if promo_code:
+        pc = db.scalar(select(PromoCode).where(
+            PromoCode.property_id == prop.id,
+            func.upper(PromoCode.code) == promo_code.strip().upper(),
+        ))
+        if pc:
+            pc.used_count += 1
     db.commit()
     return booking
 
@@ -203,7 +253,7 @@ def find_booking(db: Session, prop: Property, reference: str, email: str) -> Boo
 
 
 def booking_summary(b: Booking) -> dict:
-    return {
+    d = {
         "reference": b.reference, "status": b.status, "room": b.room_type.name,
         "room_type": b.room_type.code, "guest_name": b.guest_name,
         "check_in": b.check_in.isoformat(), "check_out": b.check_out.isoformat(),
@@ -211,6 +261,10 @@ def booking_summary(b: Booking) -> dict:
         "units": b.units, "meal_plan": b.meal_plan, "total": b.total_amount, "currency": b.currency,
         "special_requests": b.special_requests,
     }
+    if b.promo_code:
+        d["promo_code"] = b.promo_code
+        d["discount_amount"] = b.discount_amount
+    return d
 
 
 def modify_booking(db: Session, prop: Property, b: Booking, *, check_in: date | None = None,
@@ -307,3 +361,26 @@ def recommend_experiences(db: Session, prop: Property, interests: list[str] | No
     return [{"name": e.name, "category": e.category, "description": e.description,
              "duration": e.duration, "price_per_person": e.price, "currency": prop.currency,
              "family_friendly": e.family_friendly} for _, e in scored[:limit]]
+
+
+# ---------- service requests ----------
+
+def create_service_request(db: Session, prop: Property, *, category: str, details: str,
+                            session_id: str | None = None, guest_name: str = "",
+                            booking_reference: str | None = None) -> ServiceRequest:
+    booking_id = None
+    if booking_reference:
+        b = db.scalar(select(Booking).where(
+            Booking.property_id == prop.id,
+            func.upper(Booking.reference) == booking_reference.strip().upper(),
+        ))
+        booking_id = b.id if b else None
+    sr = ServiceRequest(
+        reference=new_reference("SR"), property_id=prop.id,
+        booking_id=booking_id, session_id=session_id,
+        guest_name=guest_name.strip(), category=category.strip().lower(),
+        details=details.strip(),
+    )
+    db.add(sr)
+    db.commit()
+    return sr

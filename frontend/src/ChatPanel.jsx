@@ -659,7 +659,7 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
     let gotDone    = false;
 
     try {
-      for await (const ev of chatStream(slug, sid, msg)) {
+      for await (const ev of chatStream(slug, sid, msg, lang)) {
         if (ev.type === "token") {
           streamContentRef.current += ev.content;
           setStreamContent(streamContentRef.current);
@@ -881,15 +881,39 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
           </div>
         )}
 
-        {/* greeting — only for fresh sessions */}
-        {greeting && historyCount === 0 && (
-          <div className="msg msg-assistant">
-            <div className="msg-ava" aria-hidden="true">{initials}</div>
-            <div className="msg-body">
-              <div className={`bubble${scriptClass(greeting)}`}>
-                <p>{greeting}</p>
+        {/* welcome screen — centered header, only for fresh sessions with no messages */}
+        {prop && historyCount === 0 && messages.length === 0 && !busy && (
+          <div className="chat-welcome">
+            <div className="chat-welcome-ava" aria-hidden="true">{initials}</div>
+            <p className="chat-welcome-name">{prop.assistant_name}</p>
+            <p className="chat-welcome-sub">{prop.name}</p>
+
+            {lang === "en" ? (
+              <div className="chat-welcome-chips">
+                <button className="chat-welcome-chip" onClick={() => send("Check available rooms")}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  <span>Check available rooms</span>
+                </button>
+                <button className="chat-welcome-chip" onClick={() => send("Book airport transfer")}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                  <span>Book airport transfer</span>
+                </button>
+                <button className="chat-welcome-chip" onClick={() => send("Things to do in Kandy")}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/></svg>
+                  <span>Things to do in Kandy</span>
+                </button>
+                <button className="chat-welcome-chip" onClick={() => send("View my booking")}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+                  <span>View my booking</span>
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="chips chips-centered">
+                {chips.map((s) => (
+                  <button key={s} className={`chip${scriptClass(s)}`} onClick={() => send(s)}>{s}</button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -938,11 +962,7 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
         )}
 
         {prop && messages.length === 0 && !busy && !error && (
-          <div className="chips">
-            {chips.map((s) => (
-              <button key={s} className={`chip${scriptClass(s)}`} onClick={() => send(s)}>{s}</button>
-            ))}
-          </div>
+          <div style={{display:"none"}} />
         )}
       </div>
 

@@ -77,7 +77,9 @@ def _template(prop: dict, title: str, subtitle: str,
               rows: list[tuple[str, str]],
               ref: str | None = None,
               note: str | None = None,
-              note_color: str | None = None) -> str:
+              note_color: str | None = None,
+              cta_url: str | None = None,
+              cta_text: str | None = None) -> str:
     accent = prop["accent"]
 
     # Reference badge
@@ -106,6 +108,21 @@ def _template(prop: dict, title: str, subtitle: str,
                 <td style="padding:10px 0;font-size:13px;color:#999;{sep}width:36%;vertical-align:top;">{label}</td>
                 <td style="padding:10px 0;font-size:13px;color:#1a1a1a;font-weight:500;{sep}">{value}</td>
               </tr>"""
+
+    # CTA button
+    cta_html = ""
+    if cta_url and cta_text:
+        cta_html = f"""
+        <tr>
+          <td style="padding:4px 32px 28px;text-align:center;">
+            <a href="{cta_url}"
+               style="display:inline-block;background:{accent};color:#fff;font-weight:700;
+                      font-size:15px;padding:14px 36px;border-radius:8px;text-decoration:none;
+                      letter-spacing:.01em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+              {cta_text} &rarr;
+            </a>
+          </td>
+        </tr>"""
 
     # Note block
     note_html = ""
@@ -161,6 +178,7 @@ def _template(prop: dict, title: str, subtitle: str,
             </table>
           </td>
         </tr>
+        {cta_html}
         {note_html}
         <!-- Footer -->
         <tr>
@@ -256,6 +274,55 @@ def booking_cancelled(d: dict, prop: dict) -> None:
     _send(d["email"],
           f"Booking cancelled — {d['reference']} | {prop['name']}",
           html)
+
+
+def review_request(d: dict, prop: dict) -> None:
+    """Guest: post-stay review request, sent ~1 day after check-out."""
+    first = d["guest_name"].split()[0]
+    nights = d["nights"]
+    review_url = prop.get("contact_review_url", "")
+    html = _template(
+        prop,
+        title=f"How was your stay, {first}?",
+        subtitle=(f"Thank you for choosing {prop['name']}. We hope your {nights}-night stay was everything you hoped for. "
+                  f"Your feedback means a great deal to our team."),
+        rows=[
+            ("Room",      d["room"]),
+            ("Stay",      f"{_fmt_date(d['check_in'])} &ndash; {_fmt_date(d['check_out'])}"),
+            ("Duration",  f"{nights} night{'s' if nights != 1 else ''}"),
+            ("Reference", f"<span style='font-family:monospace;letter-spacing:.05em;'>{d['reference']}</span>"),
+        ],
+        cta_url=review_url or None,
+        cta_text="Leave a Review" if review_url else None,
+        note=("Reviews take less than 2 minutes and help other travellers discover us. "
+              "We read every one personally and use your feedback to keep improving."),
+    )
+    _send(d["email"],
+          f"How was your stay? — {prop['name']}",
+          html)
+
+
+def pre_arrival(d: dict, prop: dict) -> None:
+    """Guest: pre-arrival email sent ~48h before check-in."""
+    first = d["guest_name"].split()[0]
+    nights = d["nights"]
+    html = _template(
+        prop,
+        title=f"We're looking forward to welcoming you, {first}!",
+        subtitle=f"Your stay at {prop['name']} is just 2 days away. Here's a quick reminder of your booking.",
+        rows=[
+            ("Room",      d["room"]),
+            ("Check-in",  f"{_fmt_date(d['check_in'])}&nbsp; "
+                          f"<span style='color:#aaa;font-weight:400;font-size:12px;'>from {prop['check_in_time']}</span>"),
+            ("Check-out", f"{_fmt_date(d['check_out'])}&nbsp; "
+                          f"<span style='color:#aaa;font-weight:400;font-size:12px;'>by {prop['check_out_time']}</span>"),
+            ("Duration",  f"{nights} night{'s' if nights != 1 else ''}"),
+            ("Reference", f"<span style='font-family:monospace;letter-spacing:.05em;'>{d['reference']}</span>"),
+        ],
+        note=(f"Need an airport transfer, early check-in, or have any special requests? "
+              f"Reply to this email or call us on {prop.get('phone', '')} — we're happy to help before you arrive."),
+    )
+    _send(d["email"], f"Your stay is coming up — {prop['name']}", html)
 
 
 def staff_new_booking(d: dict, prop: dict) -> None:

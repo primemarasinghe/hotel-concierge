@@ -4,7 +4,7 @@
     "name": "Kandy Hills Boutique Hotel",
     "kind": "boutique hotel",
     "location": "Anniewatte, Kandy, Sri Lanka",
-    "currency": "USD",
+    "currency": "LKR",
     "timezone": "Asia/Colombo",
     "check_in_time": "14:00",
     "check_out_time": "11:00",
@@ -12,8 +12,8 @@
     "service_charge_pct": 10,
     "weekend_uplift_pct": 10,
     "weekend_days": [4, 5],
-    "meal_plans": {"RO": 0, "BB": 12, "HB": 30},
-    "contact": {"phone": "+94 81 222 0000", "whatsapp": "+94 77 000 0000", "email": "reservations@kandyhills.example", "accent": "#2f5d3a"},
+    "meal_plans": {"RO": 0, "BB": 3600, "HB": 9000},
+    "contact": {"phone": "+94 81 222 0000", "whatsapp": "+94 77 000 0000", "email": "reservations@kandyhills.example", "accent": "#2f5d3a", "review_url": "https://g.page/r/kandy-hills-review"},
     "assistant_name": "Nila",
     "tone": "warm, gracious Sri Lankan hospitality; concise",
     "reference_prefix": "KH",
@@ -21,10 +21,10 @@
     "max_stay_nights": 21
   },
   "room_types": [
-    {"code": "DLX", "name": "Deluxe Garden Room", "description": "Calm room opening onto the tropical garden, with a private sit-out.", "max_adults": 2, "max_children": 1, "beds": "1 king or 2 twins", "size_sqm": 28, "amenities": ["air conditioning", "Wi-Fi", "rain shower", "tea & coffee", "safe"], "base_rate": 95, "total_units": 8, "image_url": "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80"},
-    {"code": "SLV", "name": "Superior Lake View Room", "description": "Upper-floor room with a balcony overlooking Kandy Lake and the Temple of the Tooth.", "max_adults": 2, "max_children": 1, "beds": "1 king", "size_sqm": 32, "amenities": ["air conditioning", "Wi-Fi", "balcony", "bathtub", "minibar", "safe"], "base_rate": 130, "total_units": 6, "image_url": "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80"},
-    {"code": "FAM", "name": "Family Suite", "description": "Two connected rooms with a lounge, ideal for families.", "max_adults": 2, "max_children": 2, "beds": "1 king + 2 singles", "size_sqm": 52, "amenities": ["air conditioning", "Wi-Fi", "lounge", "two bathrooms", "minibar"], "base_rate": 190, "total_units": 3, "image_url": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80"},
-    {"code": "HER", "name": "Heritage Suite", "description": "Colonial-era suite with antique furniture, a four-poster bed and a private terrace with lake views.", "max_adults": 2, "max_children": 0, "beds": "1 four-poster king", "size_sqm": 65, "amenities": ["air conditioning", "Wi-Fi", "private terrace", "bathtub", "butler service", "minibar"], "base_rate": 260, "total_units": 1, "image_url": "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&auto=format&fit=crop&q=80"}
+    {"code": "DLX", "name": "Deluxe Garden Room", "description": "Calm room opening onto the tropical garden, with a private sit-out.", "max_adults": 2, "max_children": 1, "beds": "1 king or 2 twins", "size_sqm": 28, "amenities": ["air conditioning", "Wi-Fi", "rain shower", "tea & coffee", "safe"], "base_rate": 28500, "total_units": 8, "image_url": "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80"},
+    {"code": "SLV", "name": "Superior Lake View Room", "description": "Upper-floor room with a balcony overlooking Kandy Lake and the Temple of the Tooth.", "max_adults": 2, "max_children": 1, "beds": "1 king", "size_sqm": 32, "amenities": ["air conditioning", "Wi-Fi", "balcony", "bathtub", "minibar", "safe"], "base_rate": 39000, "total_units": 6, "image_url": "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80"},
+    {"code": "FAM", "name": "Family Suite", "description": "Two connected rooms with a lounge, ideal for families.", "max_adults": 2, "max_children": 2, "beds": "1 king + 2 singles", "size_sqm": 52, "amenities": ["air conditioning", "Wi-Fi", "lounge", "two bathrooms", "minibar"], "base_rate": 57000, "total_units": 3, "image_url": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80"},
+    {"code": "HER", "name": "Heritage Suite", "description": "Colonial-era suite with antique furniture, a four-poster bed and a private terrace with lake views.", "max_adults": 2, "max_children": 0, "beds": "1 four-poster king", "size_sqm": 65, "amenities": ["air conditioning", "Wi-Fi", "private terrace", "bathtub", "butler service", "minibar"], "base_rate": 78000, "total_units": 1, "image_url": "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&auto=format&fit=crop&q=80"}
   ],
   "seasons": [
     {"name": "Festive peak", "start_date": "2026-12-20", "end_date": "2027-01-05", "multiplier": 1.4, "min_nights": 2},
@@ -33,20 +33,20 @@
     {"name": "Esala Perahera festival", "start_date": "2027-07-25", "end_date": "2027-08-10", "multiplier": 1.6, "min_nights": 3}
   ],
   "transfers": [
-    {"route": "Bandaranaike Int'l Airport (CMB) → Hotel", "direction": "arrival", "vehicle": "Sedan car", "max_pax": 3, "max_bags": 3, "price": 65, "duration_min": 180},
-    {"route": "Bandaranaike Int'l Airport (CMB) → Hotel", "direction": "arrival", "vehicle": "Air-conditioned van", "max_pax": 8, "max_bags": 8, "price": 90, "duration_min": 180},
-    {"route": "Hotel → Bandaranaike Int'l Airport (CMB)", "direction": "departure", "vehicle": "Sedan car", "max_pax": 3, "max_bags": 3, "price": 65, "duration_min": 180},
-    {"route": "Hotel → Bandaranaike Int'l Airport (CMB)", "direction": "departure", "vehicle": "Air-conditioned van", "max_pax": 8, "max_bags": 8, "price": 90, "duration_min": 180},
-    {"route": "Kandy Railway Station → Hotel", "direction": "arrival", "vehicle": "Tuk-tuk or car", "max_pax": 3, "max_bags": 3, "price": 8, "duration_min": 20}
+    {"route": "Bandaranaike Int'l Airport (CMB) → Hotel", "direction": "arrival", "vehicle": "Sedan car", "max_pax": 3, "max_bags": 3, "price": 19500, "duration_min": 180},
+    {"route": "Bandaranaike Int'l Airport (CMB) → Hotel", "direction": "arrival", "vehicle": "Air-conditioned van", "max_pax": 8, "max_bags": 8, "price": 27000, "duration_min": 180},
+    {"route": "Hotel → Bandaranaike Int'l Airport (CMB)", "direction": "departure", "vehicle": "Sedan car", "max_pax": 3, "max_bags": 3, "price": 19500, "duration_min": 180},
+    {"route": "Hotel → Bandaranaike Int'l Airport (CMB)", "direction": "departure", "vehicle": "Air-conditioned van", "max_pax": 8, "max_bags": 8, "price": 27000, "duration_min": 180},
+    {"route": "Kandy Railway Station → Hotel", "direction": "arrival", "vehicle": "Tuk-tuk or car", "max_pax": 3, "max_bags": 3, "price": 2400, "duration_min": 20}
   ],
   "experiences": [
-    {"name": "Temple of the Tooth guided visit", "category": "culture", "description": "Guided visit to the Sri Dalada Maligawa with a local guide, timed for the evening puja.", "duration": "2 hours", "price": 25, "tags": ["culture", "history", "temple", "religion", "heritage"], "family_friendly": true},
-    {"name": "Royal Botanical Gardens, Peradeniya", "category": "nature", "description": "Half-day at Sri Lanka's finest botanical garden: orchid house, giant bamboo and the Java fig tree.", "duration": "3 hours", "price": 20, "tags": ["nature", "gardens", "walking", "photography", "relaxed"], "family_friendly": true},
-    {"name": "Kandyan cultural dance show", "category": "culture", "description": "Evening performance of traditional Kandyan dance and fire-walking near the lake.", "duration": "1 hour", "price": 12, "tags": ["culture", "music", "dance", "evening", "show"], "family_friendly": true},
-    {"name": "Tea factory & plantation tour", "category": "food & drink", "description": "Visit a working tea estate, see leaf to cup, and finish with a tasting.", "duration": "4 hours", "price": 35, "tags": ["tea", "food", "plantation", "scenic", "drive"], "family_friendly": true},
-    {"name": "Kandy → Ella scenic train tickets", "category": "adventure", "description": "We reserve observation or 2nd-class seats on one of the world's most scenic train rides.", "duration": "7 hours", "price": 15, "tags": ["train", "scenic", "photography", "adventure", "travel"], "family_friendly": true},
-    {"name": "Knuckles Range guided hike", "category": "adventure", "description": "Full-day trek through cloud forest and villages in a UNESCO World Heritage range. Good fitness needed.", "duration": "Full day", "price": 70, "tags": ["hiking", "trekking", "nature", "adventure", "mountains"], "family_friendly": false},
-    {"name": "Sri Lankan cooking class", "category": "food & drink", "description": "Market visit and hands-on rice & curry class with our chef.", "duration": "3 hours", "price": 30, "tags": ["food", "cooking", "curry", "market", "culture"], "family_friendly": true},
-    {"name": "Udawattakele forest walk", "category": "nature", "description": "Easy guided walk in the royal forest reserve above the city; great for birdwatching.", "duration": "2 hours", "price": 10, "tags": ["nature", "birdwatching", "walking", "forest", "relaxed"], "family_friendly": true}
+    {"name": "Temple of the Tooth guided visit", "category": "culture", "description": "Guided visit to the Sri Dalada Maligawa with a local guide, timed for the evening puja.", "duration": "2 hours", "price": 7500, "tags": ["culture", "history", "temple", "religion", "heritage"], "family_friendly": true},
+    {"name": "Royal Botanical Gardens, Peradeniya", "category": "nature", "description": "Half-day at Sri Lanka's finest botanical garden: orchid house, giant bamboo and the Java fig tree.", "duration": "3 hours", "price": 6000, "tags": ["nature", "gardens", "walking", "photography", "relaxed"], "family_friendly": true},
+    {"name": "Kandyan cultural dance show", "category": "culture", "description": "Evening performance of traditional Kandyan dance and fire-walking near the lake.", "duration": "1 hour", "price": 3500, "tags": ["culture", "music", "dance", "evening", "show"], "family_friendly": true},
+    {"name": "Tea factory & plantation tour", "category": "food & drink", "description": "Visit a working tea estate, see leaf to cup, and finish with a tasting.", "duration": "4 hours", "price": 10500, "tags": ["tea", "food", "plantation", "scenic", "drive"], "family_friendly": true},
+    {"name": "Kandy → Ella scenic train tickets", "category": "adventure", "description": "We reserve observation or 2nd-class seats on one of the world's most scenic train rides.", "duration": "7 hours", "price": 4500, "tags": ["train", "scenic", "photography", "adventure", "travel"], "family_friendly": true},
+    {"name": "Knuckles Range guided hike", "category": "adventure", "description": "Full-day trek through cloud forest and villages in a UNESCO World Heritage range. Good fitness needed.", "duration": "Full day", "price": 21000, "tags": ["hiking", "trekking", "nature", "adventure", "mountains"], "family_friendly": false},
+    {"name": "Sri Lankan cooking class", "category": "food & drink", "description": "Market visit and hands-on rice & curry class with our chef.", "duration": "3 hours", "price": 9000, "tags": ["food", "cooking", "curry", "market", "culture"], "family_friendly": true},
+    {"name": "Udawattakele forest walk", "category": "nature", "description": "Easy guided walk in the royal forest reserve above the city; great for birdwatching.", "duration": "2 hours", "price": 3000, "tags": ["nature", "birdwatching", "walking", "forest", "relaxed"], "family_friendly": true}
   ]
 }

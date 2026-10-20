@@ -13,10 +13,10 @@ const CONTENT = {
       { label: "Free Cancellation", value: "Up to 7 days before arrival", icon: "M12 2L4 6v6c0 5.52 3.4 10.74 8 12 4.6-1.26 8-6.48 8-12V6L12 2z" },
     ],
     rooms: [
-      { name: "Deluxe Garden Room", size: "28 m²", beds: "King or Twin", from: "from USD 95 /night", tag: "Most Popular", desc: "Opens onto the tropical garden with a private sit-out — a peaceful retreat in the heart of Kandy." },
-      { name: "Superior Lake View", size: "32 m²", beds: "King", from: "from USD 130 /night", tag: "Best Views", desc: "Upper-floor balcony looking out across Kandy Lake and the golden roofs of the Temple of the Tooth." },
-      { name: "Family Suite", size: "52 m²", beds: "King + 2 Singles", from: "from USD 190 /night", tag: "", desc: "Two connected rooms with a lounge — space and calm for families exploring the hill country." },
-      { name: "Heritage Suite", size: "65 m²", beds: "Four-poster King", from: "from USD 260 /night", tag: "Most Exclusive", desc: "Colonial-era antiques, a private terrace with lake views and dedicated butler service." },
+      { name: "Deluxe Garden Room", size: "28 m²", beds: "King or Twin", from: "from LKR 28,500 /night", tag: "Most Popular", desc: "Opens onto the tropical garden with a private sit-out — a peaceful retreat in the heart of Kandy." },
+      { name: "Superior Lake View", size: "32 m²", beds: "King", from: "from LKR 39,000 /night", tag: "Best Views", desc: "Upper-floor balcony looking out across Kandy Lake and the golden roofs of the Temple of the Tooth." },
+      { name: "Family Suite", size: "52 m²", beds: "King + 2 Singles", from: "from LKR 57,000 /night", tag: "", desc: "Two connected rooms with a lounge — space and calm for families exploring the hill country." },
+      { name: "Heritage Suite", size: "65 m²", beds: "Four-poster King", from: "from LKR 78,000 /night", tag: "Most Exclusive", desc: "Colonial-era antiques, a private terrace with lake views and dedicated butler service." },
     ],
     experiences: [
       { name: "Temple of the Tooth", desc: "Guided evening visit to Sri Dalada Maligawa with a local expert, timed for the puja ceremony.", tag: "Culture · 2 hrs" },

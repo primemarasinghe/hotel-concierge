@@ -69,6 +69,24 @@ class SeasonalRate(Base):
     min_nights: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
+    code: Mapped[str] = mapped_column(String(32), index=True)
+    description: Mapped[str] = mapped_column(String(200), default="")
+    discount_type: Mapped[str] = mapped_column(String(8))  # "pct" | "fixed"
+    discount_value: Mapped[float] = mapped_column(Float)
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    min_nights: Mapped[int] = mapped_column(Integer, default=1)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Booking(Base):
     __tablename__ = "bookings"
 
@@ -91,6 +109,10 @@ class Booking(Base):
     special_requests: Mapped[str] = mapped_column(Text, default="")
     source: Mapped[str] = mapped_column(String(16), default="chat")
     session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    promo_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    discount_amount: Mapped[float] = mapped_column(Float, default=0)
+    review_email_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    pre_arrival_email_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -183,3 +205,19 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+class ServiceRequest(Base):
+    __tablename__ = "service_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reference: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
+    booking_id: Mapped[int | None] = mapped_column(ForeignKey("bookings.id"), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    guest_name: Mapped[str] = mapped_column(String(120), default="")
+    category: Mapped[str] = mapped_column(String(40))
+    details: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open|in_progress|done
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

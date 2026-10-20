@@ -15,8 +15,8 @@ from sqlalchemy import delete, select
 
 from . import rag, services as svc
 from .db import Base, SessionLocal, engine, init_db
-from .models import (Booking, Experience, Property, RoomType, SeasonalRate,
-                     TransferOption, TransferRequest)
+from .models import (Booking, Experience, PromoCode, Property, RoomType,
+                     SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "properties"
 
@@ -69,6 +69,7 @@ def add_demo_activity(db, prop: Property) -> None:
         return
     today = svc.today_at(prop)
     rts = sorted(prop.room_types, key=lambda r: r.base_rate)
+    # (name, email, phone, check_in_offset, nights, adults, children, status)
     guests = [("Emma Clarke", "emma@example.com", "+44 7700 900123", 0, 3, 2, 0, "confirmed"),
               ("Rahul Mehta", "rahul@example.com", "+91 98200 00000", 2, 4, 2, 1, "pending"),
               ("Sofia Rossi", "sofia@example.com", "+39 333 000 0000", 6, 3, 2, 0, "pending"),
@@ -83,6 +84,27 @@ def add_demo_activity(db, prop: Property) -> None:
                        guest_name=name, email=email, phone=phone, check_in=ci, check_out=ci + timedelta(days=nights),
                        adults=ad, children=ch, units=1, meal_plan=q["meal_plan"], total_amount=q["total"],
                        currency=prop.currency, status=status, source="demo"))
+
+    # A completed stay — useful for testing post-stay review email
+    rt_past = rts[1]
+    ci_past = today - timedelta(days=5)
+    q_past = svc.quote(db, prop, rt_past, ci_past, ci_past + timedelta(days=3), 2, 0, 1, "BB" if "BB" in prop.meal_plans else "RO")
+    db.add(Booking(reference=svc.new_reference(prop.reference_prefix), property_id=prop.id, room_type_id=rt_past.id,
+                   guest_name="Aiko Tanaka", email="aiko@example.com", phone="+81 80 0000 0001",
+                   check_in=ci_past, check_out=ci_past + timedelta(days=3),
+                   adults=2, children=0, units=1, meal_plan=q_past["meal_plan"], total_amount=q_past["total"],
+                   currency=prop.currency, status="confirmed", source="demo", review_email_sent=False))
+    # James Wilson — confirmed booking arriving in 2 days (for pre-arrival email testing)
+    rt_jw = rts[1]
+    ci_jw = today + timedelta(days=2)
+    q_jw = svc.quote(db, prop, rt_jw, ci_jw, ci_jw + timedelta(days=3), 2, 0, 1, "BB" if "BB" in prop.meal_plans else "RO")
+    db.add(Booking(reference=svc.new_reference(prop.reference_prefix), property_id=prop.id, room_type_id=rt_jw.id,
+                   guest_name="James Wilson", email="james@example.com", phone="+44 7700 900999",
+                   check_in=ci_jw, check_out=ci_jw + timedelta(days=3),
+                   adults=2, children=0, units=1, meal_plan=q_jw["meal_plan"], total_amount=q_jw["total"],
+                   currency=prop.currency, status="confirmed", source="demo",
+                   pre_arrival_email_sent=False))
+
     opt = db.scalar(select(TransferOption).where(TransferOption.property_id == prop.id,
                                                  TransferOption.direction == "arrival").order_by(TransferOption.price))
     if opt:
@@ -91,6 +113,32 @@ def add_demo_activity(db, prop: Property) -> None:
                                pickup_at=datetime.combine(today + timedelta(days=2), datetime.min.time()).replace(hour=9, minute=40),
                                flight_number="UL122", passengers=3, bags=3, price=opt.price))
     db.commit()
+
+    # Demo service requests (Emma Clarke in-house, Kenji Sato in-house on day 10)
+    db.add(ServiceRequest(reference=svc.new_reference("SR"), property_id=prop.id,
+                          guest_name="Emma Clarke", category="housekeeping",
+                          details="Extra towels and pillow requested for room", status="open"))
+    db.add(ServiceRequest(reference=svc.new_reference("SR"), property_id=prop.id,
+                          guest_name="Kenji Sato", category="late_checkout",
+                          details="Requesting late checkout at 1pm on departure day", status="in_progress"))
+    db.commit()
+
+
+def add_demo_promos(db, prop: Property) -> None:
+    if db.scalar(select(PromoCode).where(PromoCode.property_id == prop.id).limit(1)):
+        return
+    promos = [
+        PromoCode(property_id=prop.id, code="KANDY10", description="10% off your stay",
+                  discount_type="pct", discount_value=10, active=True),
+        PromoCode(property_id=prop.id, code="WELCOME2000", description="LKR 2,000 welcome discount",
+                  discount_type="fixed", discount_value=2000, active=True),
+        PromoCode(property_id=prop.id, code="ESALA25", description="Esala Festival 25% off (3+ nights)",
+                  discount_type="pct", discount_value=25, min_nights=3,
+                  valid_from=date(2027, 7, 1), valid_to=date(2027, 8, 31), active=True),
+    ]
+    db.add_all(promos)
+    db.commit()
+    print(f"  {prop.slug}: {len(promos)} demo promo codes added")
 
 
 def main():
@@ -106,6 +154,7 @@ def main():
             prop = upsert_property(db, folder)
             if args.demo:
                 add_demo_activity(db, prop)
+                add_demo_promos(db, prop)
     print("Seed complete.")
 
 
