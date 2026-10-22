@@ -374,7 +374,19 @@ def create_service_request(db: Session, prop: Property, *, category: str, detail
             Booking.property_id == prop.id,
             func.upper(Booking.reference) == booking_reference.strip().upper(),
         ))
-        booking_id = b.id if b else None
+        if b:
+            today = today_at(prop)
+            if b.check_in > today:
+                raise BookingError(
+                    f"Booking {b.reference} is not checked in yet — check-in is on {b.check_in.strftime('%d %b %Y')}. "
+                    "In-stay service requests can only be made after check-in."
+                )
+            if b.check_out <= today:
+                raise BookingError(
+                    f"Booking {b.reference} has already checked out on {b.check_out.strftime('%d %b %Y')}. "
+                    "In-stay service requests are only available during the stay."
+                )
+            booking_id = b.id
     sr = ServiceRequest(
         reference=new_reference("SR"), property_id=prop.id,
         booking_id=booking_id, session_id=session_id,

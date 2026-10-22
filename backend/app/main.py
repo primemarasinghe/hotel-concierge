@@ -784,7 +784,8 @@ def admin_calendar(year: int | None = None, month: int | None = None,
     _, ndays = cal.monthrange(y, m)
     first = date(y, m, 1)
     last = date(y, m, ndays)
-    total_units = sum(r.total_units for r in prop.room_types)
+    room_types = sorted(prop.room_types, key=lambda r: r.base_rate)
+    total_units = sum(r.total_units for r in room_types)
 
     bookings = db.scalars(select(Booking).where(
         Booking.property_id == prop.id,
@@ -795,23 +796,30 @@ def admin_calendar(year: int | None = None, month: int | None = None,
 
     def _bk(b):
         return {"reference": b.reference, "guest_name": b.guest_name,
-                "room": b.room_type.name, "nights": (b.check_out - b.check_in).days,
-                "status": b.status}
+                "room": b.room_type.name, "room_code": b.room_type.code,
+                "nights": (b.check_out - b.check_in).days, "status": b.status}
 
     days = []
     for i in range(ndays):
         d = date(y, m, i + 1)
-        occupied = sum(b.units for b in bookings if b.check_in <= d < b.check_out)
+        rt_occ = []
+        for rt in room_types:
+            occ = sum(b.units for b in bookings if b.room_type_id == rt.id and b.check_in <= d < b.check_out)
+            rt_occ.append({"code": rt.code, "occupied": occ, "total": rt.total_units,
+                           "pct": round(occ / rt.total_units * 100) if rt.total_units else 0})
+        occupied = sum(x["occupied"] for x in rt_occ)
         days.append({
             "date": d.isoformat(),
             "occupied": occupied,
+            "room_types": rt_occ,
             "arrivals":   [_bk(b) for b in bookings if b.check_in == d],
             "departures": [_bk(b) for b in bookings if b.check_out == d],
             "inhouse":    [_bk(b) for b in bookings if b.check_in < d < b.check_out],
             "occupancy_pct": round(occupied / total_units * 100) if total_units else 0,
         })
 
-    return {"year": y, "month": m, "total_units": total_units, "days": days}
+    rt_index = [{"code": rt.code, "name": rt.name, "total": rt.total_units} for rt in room_types]
+    return {"year": y, "month": m, "total_units": total_units, "room_type_index": rt_index, "days": days}
 
 
 # ── Review email scheduler ────────────────────────────────────────────────────

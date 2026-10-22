@@ -1472,6 +1472,10 @@ a { color: var(--accent); }
     linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, #f0f4f0) 0%, color-mix(in srgb, var(--accent) 8%, #e8ede8) 100%);
   transition: transform 0.4s ease;
 }
+.hp-room-img {
+  object-fit: cover;
+  display: block;
+}
 .hp-room:hover .hp-room-visual-inner { transform: scale(1.04); }
 
 .hp-room-content { flex: 1; padding: 20px 22px 22px; display: flex; flex-direction: column; }
@@ -2785,3 +2789,226 @@ details[open].avail-unavail summary::before { content: "− "; }
 }
 .cal-booking-row .ref { font-weight: 600; font-family: monospace; font-size: 0.8rem; color: var(--accent); }
 .cal-booking-row small { color: var(--muted); font-size: 0.78rem; }
+
+/* ── Room cards (list_room_types) ── */
+.room-cards-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+.room-cards-title {
+  font: 600 0.78rem/1 var(--ui);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+.room-cards-scroll {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.room-cards-scroll::-webkit-scrollbar { height: 3px; }
+.room-cards-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+.room-card {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e5e5e5);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.room-card-img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  display: block;
+}
+.room-card-img-placeholder {
+  width: 100%;
+  height: 130px;
+  background: linear-gradient(135deg, #e8f0eb 0%, #d4e4d8 100%);
+}
+.room-card-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+.room-card-name {
+  font: 600 0.88rem/1.3 var(--ui);
+  color: var(--ink);
+}
+.room-card-desc {
+  font: 400 0.75rem/1.45 var(--ui);
+  color: var(--muted);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.room-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.room-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 400 0.72rem/1 var(--ui);
+  color: var(--muted);
+}
+.room-card-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.room-card-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.room-card-rate small {
+  font: 400 0.68rem/1 var(--ui);
+  color: var(--muted);
+}
+.room-card-rate strong {
+  font: 700 0.88rem/1.2 var(--ui);
+  color: var(--accent);
+}
+.room-card-btn {
+  padding: 5px 11px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font: 600 0.75rem/1 var(--ui);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.room-card-btn:hover { opacity: 0.88; }
+
+/* ── Calendar legend ── */
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 6px 0;
+}
+.cal-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 500 0.75rem/1 var(--ui);
+  color: var(--muted);
+}
+.cal-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Per-room-type mini bars inside each calendar day cell ── */
+.cal-rt-bars {
+  position: absolute;
+  bottom: 16px;
+  left: 4px;
+  right: 4px;
+  height: 55%;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+.cal-rt-bar-wrap {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.cal-rt-bar-fill {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.25s ease;
+}
+
+/* ── Room type occupancy rows in detail panel ── */
+.cal-rt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.cal-rt-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.cal-rt-name {
+  font: 500 0.82rem/1.2 var(--ui);
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-rt-track {
+  width: 80px;
+  height: 6px;
+  background: var(--line);
+  border-radius: 99px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.cal-rt-track-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.cal-rt-count {
+  font: 600 0.78rem/1 var(--ui);
+  color: var(--muted);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 36px;
+  justify-content: flex-end;
+}
+.cal-rt-full { color: #dc2626; }
+.cal-rt-low  { color: #d97706; }
+.cal-rt-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font: 700 0.62rem/1.4 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #fee2e2;
+  color: #dc2626;
+}
+.cal-rt-badge-amber {
+  background: #fef3c7;
+  color: #d97706;
+}

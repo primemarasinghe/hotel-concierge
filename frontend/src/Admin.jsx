@@ -918,6 +918,9 @@ function ServiceRequests({ a, slug, toast, onRefresh }) {
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEK_DAYS   = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
+// Colours assigned to room types in order of base_rate (cheapest first)
+const RT_COLORS = ["#2f5d3a", "#3b82f6", "#f59e0b", "#8b5cf6"];
+
 function CalendarView({ a, slug }) {
   const now = new Date();
   const [year,  setYear]  = useState(now.getFullYear());
@@ -927,7 +930,7 @@ function CalendarView({ a, slug }) {
 
   useEffect(() => {
     setData(null);
-    a.calendar(slug, year, month).then(setData).catch(() => setData({ days: [], total_units: 0 }));
+    a.calendar(slug, year, month).then(setData).catch(() => setData({ days: [], total_units: 0, room_type_index: [] }));
   }, [a, slug, year, month]);
 
   function prevMonth() {
@@ -940,8 +943,9 @@ function CalendarView({ a, slug }) {
   }
 
   const todayStr = now.toISOString().slice(0, 10);
-  const firstDow = data ? (new Date(year, month - 1, 1).getDay() + 6) % 7 : 0; // Mon=0
+  const firstDow = data ? (new Date(year, month - 1, 1).getDay() + 6) % 7 : 0;
   const selDay   = data?.days.find(d => d.date === sel);
+  const rtIndex  = data?.room_type_index || [];
 
   if (!data) return <div className="adm-loading">Loading calendar…</div>;
 
@@ -953,26 +957,53 @@ function CalendarView({ a, slug }) {
         <button className="adm-btn adm-btn-ghost-sm" onClick={nextMonth}>Next →</button>
       </div>
 
+      {/* Room type legend */}
+      {rtIndex.length > 0 && (
+        <div className="cal-legend">
+          {rtIndex.map((rt, i) => (
+            <span key={rt.code} className="cal-legend-item">
+              <span className="cal-legend-dot" style={{ background: RT_COLORS[i % RT_COLORS.length] }} />
+              {rt.code}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="cal-grid">
         {WEEK_DAYS.map(d => <div key={d} className="cal-weekday">{d}</div>)}
         {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} className="cal-day cal-day-empty" />)}
         {data.days.map(day => {
-          const num  = parseInt(day.date.slice(8), 10);
-          const pct  = data.total_units > 0 ? day.occupied / data.total_units : 0;
+          const num     = parseInt(day.date.slice(8), 10);
           const isToday = day.date === todayStr;
           const isSel   = day.date === sel;
+          const rtBars  = day.room_types || [];
           return (
             <button
               key={day.date}
               className={`cal-day${isToday ? " cal-today" : ""}${isSel ? " cal-selected" : ""}`}
               onClick={() => setSel(isSel ? null : day.date)}
+              title={rtBars.map(rt => `${rt.code}: ${rt.occupied}/${rt.total}`).join("  ")}
             >
               <span className="cal-day-num">{num}</span>
-              {day.occupied > 0 && (
-                <div className="cal-occ-fill" style={{ height: `${Math.max(pct * 100, 8)}%` }} />
-              )}
               {day.arrivals?.length > 0 && (
                 <span className="cal-arrival-badge">{day.arrivals.length}</span>
+              )}
+              {/* Per-room-type mini bars */}
+              {rtBars.length > 0 && (
+                <div className="cal-rt-bars">
+                  {rtBars.map((rt, i) => (
+                    <div key={rt.code} className="cal-rt-bar-wrap">
+                      <div
+                        className="cal-rt-bar-fill"
+                        style={{
+                          height: rt.pct > 0 ? `${Math.max(rt.pct, 12)}%` : "0%",
+                          background: RT_COLORS[i % RT_COLORS.length],
+                          opacity: rt.pct >= 100 ? 1 : 0.65 + rt.pct / 300,
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               )}
               <span className="cal-occ-txt">{day.occupied}/{data.total_units}</span>
             </button>
@@ -985,9 +1016,35 @@ function CalendarView({ a, slug }) {
           <div className="cal-detail-head">
             <strong>{fmtDate(selDay.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</strong>
             <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-              {selDay.occupied}/{data.total_units} units occupied
+              {selDay.occupied}/{data.total_units} rooms occupied
             </span>
           </div>
+
+          {/* Per-room-type occupancy breakdown */}
+          <div className="cal-detail-section">
+            <span className="cal-section-lbl">Room availability</span>
+            {(selDay.room_types || []).map((rt, i) => {
+              const info = rtIndex.find(x => x.code === rt.code);
+              const free = rt.total - rt.occupied;
+              const color = RT_COLORS[i % RT_COLORS.length];
+              return (
+                <div key={rt.code} className="cal-rt-row">
+                  <span className="cal-rt-dot" style={{ background: color }} />
+                  <span className="cal-rt-name">{info?.name || rt.code}</span>
+                  <div className="cal-rt-track">
+                    <div className="cal-rt-track-fill"
+                      style={{ width: `${rt.pct}%`, background: color }} />
+                  </div>
+                  <span className={`cal-rt-count${rt.occupied >= rt.total ? " cal-rt-full" : free === 1 ? " cal-rt-low" : ""}`}>
+                    {rt.occupied}/{rt.total}
+                    {rt.occupied >= rt.total && <span className="cal-rt-badge">FULL</span>}
+                    {rt.occupied < rt.total && free === 1 && <span className="cal-rt-badge cal-rt-badge-amber">1 left</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
           {selDay.arrivals?.length > 0 && (
             <div className="cal-detail-section">
               <span className="cal-section-lbl">Check-ins ({selDay.arrivals.length})</span>
@@ -1025,7 +1082,7 @@ function CalendarView({ a, slug }) {
             </div>
           )}
           {!selDay.arrivals?.length && !selDay.inhouse?.length && !selDay.departures?.length && (
-            <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "12px 0 0" }}>No bookings on this day.</p>
+            <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "8px 0 0" }}>No check-ins, in-house, or check-outs on this day.</p>
           )}
         </div>
       )}

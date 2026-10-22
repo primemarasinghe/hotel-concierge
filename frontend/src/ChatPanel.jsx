@@ -91,6 +91,54 @@ function CopyButton({ text }) {
   );
 }
 
+// ── Room cards (list_room_types event) ────────────────────────────────────────
+function RoomCardsCard({ data, onSend }) {
+  return (
+    <div className="room-cards-wrap">
+      <p className="room-cards-title">Our rooms &amp; suites</p>
+      <div className="room-cards-scroll">
+        {data.rooms.map((room) => (
+          <div className="room-card" key={room.code}>
+            {room.image_url
+              ? <img src={room.image_url} alt={room.name} className="room-card-img" loading="lazy"
+                  onError={(e) => { e.target.style.display = "none"; }} />
+              : <div className="room-card-img-placeholder" />
+            }
+            <div className="room-card-body">
+              <strong className="room-card-name">{room.name}</strong>
+              <p className="room-card-desc">{room.description}</p>
+              <div className="room-card-meta">
+                <span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  {room.beds}
+                </span>
+                <span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  {room.sleeps}
+                </span>
+                {room.size_sqm && (
+                  <span>{room.size_sqm} m²</span>
+                )}
+              </div>
+              <div className="room-card-footer">
+                <div className="room-card-rate">
+                  <small>From</small>
+                  <strong>{money(room.rate_from, room.currency)}</strong>
+                  <small>/ night</small>
+                </div>
+                <button className="room-card-btn"
+                  onClick={() => onSend(`Tell me more about the ${room.name} and I'd like to book it`)}>
+                  Select →
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Availability results card ─────────────────────────────────────────────────
 function AvailabilityCard({ data, onSend }) {
   const available = data.rooms.filter((r) => r.available);
@@ -267,6 +315,9 @@ const STATUS_LABEL = { pending: "Awaiting confirmation", confirmed: "Confirmed",
 export function EventCard({ event, onSend = () => {} }) {
   const d = event.data;
 
+  if (event.type === "room_cards") {
+    return <RoomCardsCard data={d} onSend={onSend} />;
+  }
   if (event.type === "availability_results") {
     return <AvailabilityCard data={d} onSend={onSend} />;
   }

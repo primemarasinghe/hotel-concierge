@@ -121,10 +121,13 @@ class ConciergeAgent:
     # --- tool implementations (closures over db/property) ---
 
     def _list_room_types(self):
-        return [{"code": r.code, "name": r.name, "description": r.description, "beds": r.beds,
-                 "size_sqm": r.size_sqm, "sleeps": f"{r.max_adults} adults + {r.max_children} children",
-                 "amenities": r.amenities, "rate_from": r.base_rate, "currency": self.prop.currency}
-                for r in self.prop.room_types]
+        rooms = [{"code": r.code, "name": r.name, "description": r.description, "beds": r.beds,
+                  "size_sqm": r.size_sqm, "sleeps": f"{r.max_adults} adults + {r.max_children} children",
+                  "amenities": r.amenities, "rate_from": r.base_rate, "currency": self.prop.currency,
+                  "image_url": r.image_url}
+                 for r in self.prop.room_types]
+        self.events.append({"type": "room_cards", "data": {"rooms": rooms, "currency": self.prop.currency}})
+        return [{k: v for k, v in r.items() if k != "image_url"} for r in rooms]
 
     def _search_knowledge(self, query):
         return rag.search(self.db, self.prop, query)
@@ -245,12 +248,15 @@ class ConciergeAgent:
         return {"ok": True, "contact": self.prop.contact}
 
     def _log_service_request(self, category, details, guest_name="", booking_reference=None):
-        sr = svc.create_service_request(
-            self.db, self.prop,
-            category=category, details=details,
-            session_id=self.conv.id, guest_name=guest_name,
-            booking_reference=booking_reference,
-        )
+        try:
+            sr = svc.create_service_request(
+                self.db, self.prop,
+                category=category, details=details,
+                session_id=self.conv.id, guest_name=guest_name,
+                booking_reference=booking_reference,
+            )
+        except svc.BookingError as e:
+            return {"ok": False, "error": str(e)}
         self.events.append({"type": "service_request", "data": {"reference": sr.reference, "category": category, "details": details}})
         return {"ok": True, "reference": sr.reference, "message": "Your request has been logged and our team will attend to it shortly."}
 
@@ -269,7 +275,7 @@ class ConciergeAgent:
             ("book_transfer", self._book_transfer, TransferArgs, "Request an airport or other transfer."),
             ("recommend_experiences", self._recommend_experiences, ExperienceArgs, "Suggest tours, dining and activities matched to guest interests."),
             ("request_human", self._request_human, HandoffArgs, "Flag the conversation for staff follow-up (complaints, special cases, anything you can't resolve)."),
-            ("log_service_request", self._log_service_request, ServiceRequestArgs, "Log an in-stay service request (housekeeping, room service, maintenance, late checkout, wake-up call, etc.). Call immediately when a guest makes any in-stay request — do NOT ask for confirmation first."),
+            ("log_service_request", self._log_service_request, ServiceRequestArgs, "Log an in-stay service request (housekeeping, room service, maintenance, late checkout, wake-up call, etc.). Only call this once you know the guest's name. Pass booking_reference if available so staff know which room to attend."),
         ]
         return [StructuredTool.from_function(func=self._wrap(name, fn), name=name, description=desc, args_schema=schema)
                 for name, fn, schema, desc in spec]
@@ -372,7 +378,11 @@ Transfer rules:
 13. If a vehicle's capacity is exceeded, state which specific limit was exceeded (passengers OR bags, not both unless both are over) and offer only the smallest vehicle that fits.
 
 In-stay service rules:
-17. When a guest who is already checked in asks for housekeeping, extra towels, room service, maintenance, a late checkout, a wake-up call, or any other in-room service — call log_service_request IMMEDIATELY with an appropriate category and a brief details description. Do NOT ask the guest to confirm before calling the tool. After the tool returns, tell the guest warmly that the request has been logged and the team will attend to it shortly, quoting the reference number.
+17. When a guest asks for housekeeping, extra towels, room service, maintenance, a late checkout, a wake-up call, or any other in-room service:
+    a. If you do NOT yet know their name and booking reference, ask for BOTH in a single message before doing anything else: "I'd be happy to arrange that! Could you share your name and booking reference (e.g. KH-XXXXXX) so I can log this for your room?"
+    b. If the guest cannot find their reference, accept their name plus check-in date as an alternative identifier — pass whatever you have to the tool.
+    c. Once you have the guest's name (and ideally their booking reference), call log_service_request IMMEDIATELY — do NOT ask "shall I log this?" or any other confirmation. The guest already asked; just do it.
+    d. After the tool returns, tell the guest warmly that the request has been logged and the team will attend to it shortly, quoting the reference number.
 """
 
     def _history(self) -> list:

@@ -13,10 +13,10 @@ const CONTENT = {
       { label: "Free Cancellation", value: "Up to 7 days before arrival", icon: "M12 2L4 6v6c0 5.52 3.4 10.74 8 12 4.6-1.26 8-6.48 8-12V6L12 2z" },
     ],
     rooms: [
-      { name: "Deluxe Garden Room", size: "28 m²", beds: "King or Twin", from: "from LKR 28,500 /night", tag: "Most Popular", desc: "Opens onto the tropical garden with a private sit-out — a peaceful retreat in the heart of Kandy." },
-      { name: "Superior Lake View", size: "32 m²", beds: "King", from: "from LKR 39,000 /night", tag: "Best Views", desc: "Upper-floor balcony looking out across Kandy Lake and the golden roofs of the Temple of the Tooth." },
-      { name: "Family Suite", size: "52 m²", beds: "King + 2 Singles", from: "from LKR 57,000 /night", tag: "", desc: "Two connected rooms with a lounge — space and calm for families exploring the hill country." },
-      { name: "Heritage Suite", size: "65 m²", beds: "Four-poster King", from: "from LKR 78,000 /night", tag: "Most Exclusive", desc: "Colonial-era antiques, a private terrace with lake views and dedicated butler service." },
+      { name: "Deluxe Garden Room", size: "28 m²", beds: "King or Twin", from: "from LKR 28,500 /night", tag: "Most Popular", desc: "Opens onto the tropical garden with a private sit-out — a peaceful retreat in the heart of Kandy.", image_url: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80" },
+      { name: "Superior Lake View", size: "32 m²", beds: "King", from: "from LKR 39,000 /night", tag: "Best Views", desc: "Upper-floor balcony looking out across Kandy Lake and the golden roofs of the Temple of the Tooth.", image_url: "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80" },
+      { name: "Family Suite", size: "52 m²", beds: "King + 2 Singles", from: "from LKR 57,000 /night", tag: "", desc: "Two connected rooms with a lounge — space and calm for families exploring the hill country.", image_url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80" },
+      { name: "Heritage Suite", size: "65 m²", beds: "Four-poster King", from: "from LKR 78,000 /night", tag: "Most Exclusive", desc: "Colonial-era antiques, a private terrace with lake views and dedicated butler service.", image_url: "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&auto=format&fit=crop&q=80" },
     ],
     experiences: [
       { name: "Temple of the Tooth", desc: "Guided evening visit to Sri Dalada Maligawa with a local expert, timed for the puja ceremony.", tag: "Culture · 2 hrs" },
@@ -226,7 +226,11 @@ export default function Demo() {
               {content.rooms.map((r) => (
                 <article className="hp-room" key={r.name}>
                   <div className="hp-room-visual" aria-hidden="true">
-                    <div className="hp-room-visual-inner" />
+                    {r.image_url
+                      ? <img src={r.image_url} alt={r.name} className="hp-room-visual-inner hp-room-img"
+                          loading="lazy" onError={(e) => { e.target.style.display = "none"; }} />
+                      : <div className="hp-room-visual-inner" />
+                    }
                   </div>
                   <div className="hp-room-content">
                     <div className="hp-room-meta">
@@ -322,17 +326,6 @@ export default function Demo() {
             </div>
           </section>
 
-          {/* ── Embed snippet ── */}
-          <section className="hp-section hp-embed-section" aria-labelledby="embed-heading">
-            <header className="hp-section-head">
-              <p className="hp-section-eyebrow">For Developers</p>
-              <h2 id="embed-heading">Add this widget to any hotel website</h2>
-              <p>One script tag. Each property keeps its own rooms, rates and knowledge docs.</p>
-            </header>
-            <pre className="hp-embed-code" tabIndex={0}>
-              <code>{`<script src="${origin}/embed.js" data-property="${slug}" data-accent="${accent}" defer></script>`}</code>
-            </pre>
-          </section>
         </>
       )}
 
