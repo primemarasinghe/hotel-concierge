@@ -107,11 +107,13 @@ function StatCard({ iconKey, value, label, action, onClick, urgent }) {
           <path d={ICONS[iconKey]}/>
         </svg>
       </div>
-      <div className="stat-card-n">{value}</div>
-      <div className="stat-card-l">{label}</div>
-      {action && value > 0 && (
-        <button className="stat-card-action" onClick={onClick}>{action} →</button>
-      )}
+      <div className="stat-card-body">
+        <div className="stat-card-n">{value}</div>
+        <div className="stat-card-l">{label}</div>
+        {action && value > 0 && (
+          <button className="stat-card-action" onClick={onClick}>{action} →</button>
+        )}
+      </div>
     </div>
   );
 }
@@ -277,26 +279,64 @@ function Overview({ a, slug, goTo }) {
     a.summary(slug).then(setS).catch(() => setS(null));
   }, [a, slug]);
   if (!s) return <div className="adm-loading">Loading overview…</div>;
+
+  const dateLabel = fmtDate(s.today, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const totalUnits = s.occupancy?.[0]?.total ?? 0;
+  const occPct = totalUnits ? Math.round((s.in_house / totalUnits) * 100) : 0;
+  const urgentCount = (s.pending ?? 0) + (s.open_handoffs ?? 0) + (s.open_service_requests ?? 0);
+
   return (
-    <>
-      <div className="stat-grid">
-        <StatCard iconKey="arrivals"   value={s.arrivals_today}  label="Arriving today" />
-        <StatCard iconKey="departures" value={s.departures_today} label="Leaving today" />
-        <StatCard iconKey="inhouse"    value={s.in_house}         label="Staying tonight" />
-        <StatCard iconKey="pending"    value={s.pending}          label="Awaiting confirmation" action="Confirm now" onClick={() => goTo("bookings")} urgent={s.pending > 0} />
-        <StatCard iconKey="transfers"  value={s.transfers_48h}    label="Transfers in 48 h"    action="Review"      onClick={() => goTo("transfers")} />
-        <StatCard iconKey="handoffs"   value={s.open_handoffs}    label="Guests asking for staff" action="View"     onClick={() => goTo("conversations")} urgent={s.open_handoffs > 0} />
-        {s.open_service_requests > 0 && (
-          <StatCard iconKey="handoffs" value={s.open_service_requests} label="Open service requests" action="View" onClick={() => goTo("requests")} urgent />
-        )}
+    <div className="overview-wrap">
+
+      {/* ── Page header ── */}
+      <div className="overview-head">
+        <div className="overview-head-left">
+          <h2 className="overview-title">Today</h2>
+          <p className="overview-date">{dateLabel}</p>
+        </div>
+        <div className="overview-head-right">
+          {totalUnits > 0 && (
+            <div className="overview-occ-pill">
+              <span className="overview-occ-pct">{occPct}%</span>
+              <span className="overview-occ-sub">occupied · {s.in_house}/{totalUnits} rooms</span>
+            </div>
+          )}
+          {urgentCount > 0 && (
+            <div className="overview-alert-pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01"/></svg>
+              <span>{urgentCount} action{urgentCount !== 1 ? "s" : ""} needed</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <Occupancy days={s.occupancy} />
+      {/* ── Activity section ── */}
+      <section className="overview-section">
+        <h3 className="overview-section-label">Today's Activity</h3>
+        <div className="stat-grid">
+          <StatCard iconKey="arrivals"   value={s.arrivals_today}   label="Arriving today" />
+          <StatCard iconKey="departures" value={s.departures_today}  label="Leaving today" />
+          <StatCard iconKey="inhouse"    value={s.in_house}          label="Staying tonight" />
+          <StatCard iconKey="pending"    value={s.pending}           label="Awaiting confirmation" action="Confirm now" onClick={() => goTo("bookings")}      urgent={s.pending > 0} />
+          <StatCard iconKey="transfers"  value={s.transfers_48h}     label="Transfers in 48 h"     action="Review"      onClick={() => goTo("transfers")} />
+          <StatCard iconKey="handoffs"   value={s.open_handoffs}     label="Guests needing staff"  action="View"        onClick={() => goTo("conversations")} urgent={s.open_handoffs > 0} />
+          {s.open_service_requests > 0 && (
+            <StatCard iconKey="handoffs" value={s.open_service_requests} label="Open service requests" action="View" onClick={() => goTo("requests")} urgent />
+          )}
+        </div>
+      </section>
 
-      <div className="rev-section">
-        <div className="rev-section-head">
-          <h3>Revenue</h3>
-          <span>month-to-date confirmed bookings</span>
+      {/* ── Occupancy section ── */}
+      <section className="overview-section">
+        <h3 className="overview-section-label">Occupancy Forecast</h3>
+        <Occupancy days={s.occupancy} />
+      </section>
+
+      {/* ── Revenue section ── */}
+      <section className="overview-section">
+        <div className="overview-section-head-row">
+          <h3 className="overview-section-label">Revenue</h3>
+          <span className="overview-section-sub">month-to-date · confirmed bookings</span>
         </div>
         <div className="rev-kpis">
           <div className="rev-kpi">
@@ -330,8 +370,9 @@ function Overview({ a, slug, goTo }) {
         ) : (
           <RevenueForecast days={s.revenue_forecast} currency={s.currency} />
         )}
-      </div>
-    </>
+      </section>
+
+    </div>
   );
 }
 
