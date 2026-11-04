@@ -1,27 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel.jsx";
+import VoiceAgent from "./VoiceAgent.jsx";
 import { api } from "./api.js";
 
 const CONTENT = {
-  "kandy-hills": {
-    tagline: "Where hill country meets timeless hospitality",
-    subtitle: "Twenty rooms above Kandy Lake · Five minutes from the Temple of the Tooth",
-    kind: "Boutique Hotel",
+  "leisureville-sigiriya": {
+    tagline: "Awaken to the ancient rock. Unwind in the jungle.",
+    subtitle: "Three-bedroom holiday bungalow · Steps from the UNESCO Lion Rock Fortress",
+    kind: "Holiday Bungalow",
     highlights: [
-      { label: "Location", value: "Anniewatte, Kandy, Sri Lanka", icon: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" },
+      { label: "Location", value: "Sigiriya, North Central Province, Sri Lanka", icon: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" },
       { label: "Check-in / out", value: "14:00 · 11:00", icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.5 5v5.25l4.5 2.67-.75 1.23L11 13V7h1.5z" },
       { label: "Free Cancellation", value: "Up to 7 days before arrival", icon: "M12 2L4 6v6c0 5.52 3.4 10.74 8 12 4.6-1.26 8-6.48 8-12V6L12 2z" },
     ],
     rooms: [
-      { name: "Deluxe Garden Room", size: "28 m²", beds: "King or Twin", from: "from LKR 28,500 /night", tag: "Most Popular", desc: "Opens onto the tropical garden with a private sit-out — a peaceful retreat in the heart of Kandy.", image_url: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80" },
-      { name: "Superior Lake View", size: "32 m²", beds: "King", from: "from LKR 39,000 /night", tag: "Best Views", desc: "Upper-floor balcony looking out across Kandy Lake and the golden roofs of the Temple of the Tooth.", image_url: "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80" },
-      { name: "Family Suite", size: "52 m²", beds: "King + 2 Singles", from: "from LKR 57,000 /night", tag: "", desc: "Two connected rooms with a lounge — space and calm for families exploring the hill country.", image_url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80" },
-      { name: "Heritage Suite", size: "65 m²", beds: "Four-poster King", from: "from LKR 78,000 /night", tag: "Most Exclusive", desc: "Colonial-era antiques, a private terrace with lake views and dedicated butler service.", image_url: "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&auto=format&fit=crop&q=80" },
+      { name: "Master Bedroom", size: "24 m²", beds: "King bed", from: "LKR 10,000 /night", tag: "En-suite Bath", desc: "Spacious air-conditioned master bedroom with a king bed, en-suite bathroom and a private veranda overlooking the tropical garden.", image_url: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80" },
+      { name: "Bedroom 2", size: "20 m²", beds: "2 Twin beds", from: "LKR 10,000 /night", tag: "", desc: "Comfortable air-conditioned bedroom with twin beds — ideal for friends or family sharing a room.", image_url: "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80" },
+      { name: "Bedroom 3", size: "20 m²", beds: "2 Twin beds", from: "LKR 10,000 /night", tag: "Garden Views", desc: "Air-conditioned twin bedroom overlooking the tropical garden and the surrounding paddy fields.", image_url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80" },
     ],
     experiences: [
-      { name: "Temple of the Tooth", desc: "Guided evening visit to Sri Dalada Maligawa with a local expert, timed for the puja ceremony.", tag: "Culture · 2 hrs" },
-      { name: "Kandy–Ella Scenic Train", desc: "We reserve observation-car seats on one of the world's most photographed railway rides.", tag: "Adventure · 7 hrs" },
-      { name: "Tea Plantation Tour", desc: "Visit a working estate, see leaf to cup, and finish with a guided tasting alongside our chef.", tag: "Food & Drink · 4 hrs" },
+      { name: "Sigiriya Rock Fortress", desc: "Guided climb of the UNESCO Lion Rock — ancient frescoes, the mirror wall and spectacular views from the summit.", tag: "Culture · 3 hrs" },
+      { name: "Minneriya Elephant Safari", desc: "Jeep safari to witness Sri Lanka's famous elephant gathering — often 200+ wild elephants around the ancient tank.", tag: "Nature · 4 hrs" },
+      { name: "Hiriwadunna Village Tour", desc: "Bullock-cart ride, boat trip on the reservoir and a home-cooked Sri Lankan lunch with a local family.", tag: "Culture · 4 hrs" },
     ],
   },
 };
@@ -70,6 +70,17 @@ export default function Demo() {
   const [props, setProps] = useState([]);
   const [slug, setSlug] = useState(() => new URLSearchParams(window.location.search).get("p") || "");
   const [open, setOpen] = useState(false);
+  const [chatInitialMsg, setChatInitialMsg] = useState("");
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  function openChat(msg = "") {
+    setChatInitialMsg(msg);
+    setOpen(true);
+  }
+  function closeChat() {
+    setOpen(false);
+    setChatInitialMsg("");
+  }
   const [err, setErr] = useState("");
   const [scrolled, setScrolled] = useState(false);
 
@@ -131,7 +142,7 @@ export default function Demo() {
             <a href="#rooms" onClick={(e) => { e.preventDefault(); document.getElementById("rooms")?.scrollIntoView({ behavior: "smooth" }); }}>Rooms</a>
             <a href="#experiences" onClick={(e) => { e.preventDefault(); document.getElementById("experiences")?.scrollIntoView({ behavior: "smooth" }); }}>Experiences</a>
             <a href="/booking" className="hp-nav-mybooking">My Booking</a>
-            <button className="hp-nav-chat" onClick={() => setOpen(true)}>Chat with Concierge</button>
+            <button className="hp-nav-chat" onClick={() => openChat()}>Chat with Concierge</button>
             <a href="/admin" className="hp-nav-admin">Staff →</a>
           </div>
         </div>
@@ -152,15 +163,21 @@ export default function Demo() {
             </>
           )}
           <div className="hp-hero-actions">
-            <button className="hp-btn-primary" onClick={() => setOpen(true)}>
+            <button className="hp-btn-primary" onClick={() => openChat()}>
               Check Availability
               <SvgIcon d={ARROW} size={17} strokeWidth={2} />
             </button>
-            <button className="hp-btn-ghost" onClick={() => setOpen(true)}>
+            <button className="hp-btn-ghost" onClick={() => openChat()}>
               Ask the Concierge
             </button>
           </div>
         </div>
+        <img
+          src="/White%20Line-Art%20Hand%20Holding%20Lotus.png"
+          alt=""
+          aria-hidden="true"
+          className="hp-hero-art"
+        />
         <button className="hp-hero-scroll" aria-label="Scroll down"
           onClick={() => document.getElementById("highlights")?.scrollIntoView({ behavior: "smooth" })}>
           <SvgIcon d={SCROLL_DOWN} size={22} strokeWidth={1.5} />
@@ -244,7 +261,7 @@ export default function Demo() {
                         {r.tag && <span className="hp-room-tag">{r.tag}</span>}
                         <span className="hp-room-rate">{r.from}</span>
                       </div>
-                      <button className="hp-room-book" onClick={() => setOpen(true)} aria-label={`Book ${r.name}`}>
+                      <button className="hp-room-book" onClick={() => openChat(`I'd like to book the ${r.name}`)} aria-label={`Book ${r.name}`}>
                         Book <SvgIcon d={ARROW} size={13} strokeWidth={2} />
                       </button>
                     </div>
@@ -267,7 +284,7 @@ export default function Demo() {
                   <p className="hp-exp-tag">{e.tag}</p>
                   <h3>{e.name}</h3>
                   <p>{e.desc}</p>
-                  <button className="hp-exp-link" onClick={() => setOpen(true)}
+                  <button className="hp-exp-link" onClick={() => openChat(`I'm interested in the ${e.name}. Can you tell me more and help me arrange it?`)}
                     aria-label={`Ask the concierge about ${e.name}`}>
                     Ask the concierge →
                   </button>
@@ -318,7 +335,7 @@ export default function Demo() {
                 <span className="hp-step-n" aria-hidden="true">→</span>
                 <h3>Try it now</h3>
                 <p>Open the chat and ask anything — availability, rates, experiences.</p>
-                <button className="hp-btn-primary hp-step-btn" onClick={() => setOpen(true)}>
+                <button className="hp-btn-primary hp-step-btn" onClick={() => openChat()}>
                   Chat with {current?.assistant_name || "Concierge"}
                   <SvgIcon d={ARROW} size={16} strokeWidth={2} />
                 </button>
@@ -352,16 +369,35 @@ export default function Demo() {
         <p className="hp-footer-copy">© {new Date().getFullYear()} AI Hotel Concierge · Demo build</p>
       </footer>
 
-      {/* ── Floating chat ── */}
+      {/* ── Voice agent popup ── */}
+      {voiceOpen && slug && (
+        <VoiceAgent key={slug} slug={slug} onClose={() => setVoiceOpen(false)} />
+      )}
+
+      {/* ── Floating chat + voice ── */}
       {slug && (
         <div className={`dock${open ? " dock-open" : ""}`}>
-          {open && <ChatPanel key={slug} slug={slug} onClose={() => setOpen(false)} />}
+          {open && <ChatPanel key={slug} slug={slug} onClose={closeChat} initialMessage={chatInitialMsg} />}
           {!open && (
-            <button className="launcher" onClick={() => setOpen(true)} aria-label="Chat with the concierge">
-              <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-                <path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-              </svg>
-            </button>
+            <>
+              <button
+                className="voice-launcher"
+                onClick={() => setVoiceOpen(true)}
+                aria-label="Voice concierge"
+                title="Talk to the concierge"
+              >
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="2" width="6" height="13" rx="3" />
+                  <path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6" />
+                </svg>
+              </button>
+              <button className="launcher" onClick={() => openChat()} aria-label="Chat with the concierge">
+                <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+                  <path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
       )}

@@ -38,10 +38,10 @@ def _guests(adults: int, children: int) -> str:
     return s
 
 
-def _smtp_send(to: str, subject: str, html: str) -> None:
+def _smtp_send(to: str, subject: str, html: str, from_name: str | None = None) -> None:
     from_addr = settings.email_from or settings.smtp_user
-    from_hdr = (f"{settings.email_from_name} <{from_addr}>"
-                if settings.email_from_name else from_addr)
+    name = from_name or settings.email_from_name
+    from_hdr = (f"{name} <{from_addr}>" if name else from_addr)
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_hdr
@@ -62,11 +62,11 @@ def _smtp_send(to: str, subject: str, html: str) -> None:
             s.sendmail(from_addr, to, msg.as_string())
 
 
-def _send(to: str, subject: str, html: str) -> None:
+def _send(to: str, subject: str, html: str, from_name: str | None = None) -> None:
     if not _ready() or not to:
         return
     try:
-        _smtp_send(to, subject, html)
+        _smtp_send(to, subject, html, from_name)
     except Exception as exc:
         print(f"[email] ✗ → {to}: {exc}")
 
@@ -233,7 +233,7 @@ def booking_received(d: dict, prop: dict) -> None:
     )
     _send(d["email"],
           f"Booking received — {d['reference']} | {prop['name']}",
-          html)
+          html, from_name=prop["name"])
 
 
 def booking_confirmed(d: dict, prop: dict) -> None:
@@ -251,7 +251,7 @@ def booking_confirmed(d: dict, prop: dict) -> None:
     )
     _send(d["email"],
           f"Booking confirmed ✓ — {d['reference']} | {prop['name']}",
-          html)
+          html, from_name=prop["name"])
 
 
 def booking_cancelled(d: dict, prop: dict) -> None:
@@ -273,7 +273,7 @@ def booking_cancelled(d: dict, prop: dict) -> None:
     )
     _send(d["email"],
           f"Booking cancelled — {d['reference']} | {prop['name']}",
-          html)
+          html, from_name=prop["name"])
 
 
 def review_request(d: dict, prop: dict) -> None:
@@ -299,7 +299,7 @@ def review_request(d: dict, prop: dict) -> None:
     )
     _send(d["email"],
           f"How was your stay? — {prop['name']}",
-          html)
+          html, from_name=prop["name"])
 
 
 def pre_arrival(d: dict, prop: dict) -> None:
@@ -322,7 +322,7 @@ def pre_arrival(d: dict, prop: dict) -> None:
         note=(f"Need an airport transfer, early check-in, or have any special requests? "
               f"Reply to this email or call us on {prop.get('phone', '')} — we're happy to help before you arrive."),
     )
-    _send(d["email"], f"Your stay is coming up — {prop['name']}", html)
+    _send(d["email"], f"Your stay is coming up — {prop['name']}", html, from_name=prop["name"])
 
 
 def staff_new_booking(d: dict, prop: dict) -> None:
@@ -355,4 +355,4 @@ def staff_new_booking(d: dict, prop: dict) -> None:
     )
     _send(settings.staff_email,
           f"New booking: {d['reference']} — {d['guest_name']} (check-in {d['check_in'][:10]})",
-          html)
+          html, from_name=prop["name"])

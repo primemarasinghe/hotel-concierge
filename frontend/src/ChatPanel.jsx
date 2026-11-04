@@ -181,7 +181,7 @@ function AvailabilityCard({ data, onSend }) {
               <small>total incl. tax</small>
             </div>
             <button className="avail-select-btn" onClick={() =>
-              onSend(`I'd like to book the ${room.name} (room type: ${room.room_type}) — ${data.check_in} to ${data.check_out}, ${data.adults} adult${data.adults !== 1 ? "s" : ""}${data.children ? ` and ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}, ${data.meal_plan || "RO"}, total ${money(room.total, data.currency)}. Please go ahead.`)
+              onSend(`I'd like to book the ${room.name} (room type: ${room.room_type}) — ${data.check_in} to ${data.check_out}, ${data.adults} adult${data.adults !== 1 ? "s" : ""}${data.children ? ` and ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}, ${data.meal_plan || "RO"}.`)
             }>
               Select →
             </button>
@@ -245,10 +245,10 @@ function QuoteCard({ data, onSend }) {
         <span>Total</span>
         <span className="quote-total">{money(data.total, data.currency)}</span>
       </div>
-      <button className="avail-select-btn quote-book-btn" onClick={() =>
+      <button className="avail-select-btn quote-book-btn quote-confirm-btn" onClick={() =>
         onSend(`Please go ahead and book the ${data.room_name} (room type: ${data.room_type_code}) — ${data.check_in} to ${data.check_out}, ${data.adults} adult${data.adults !== 1 ? "s" : ""}${data.children ? ` and ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}, ${data.meal_plan || "RO"}, total ${money(data.total, data.currency)}.`)
       }>
-        Book this room →
+        ✓ Confirm Booking
       </button>
     </div>
   );
@@ -309,6 +309,71 @@ function TransferOptionsCard({ data, onSend }) {
   );
 }
 
+// ── Guest details form card ───────────────────────────────────────────────────
+function GuestDetailsCard({ onSend }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [errors, setErrors] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+
+  function validate() {
+    const e = {};
+    if (name.trim().length < 2) e.name = "Please enter your full name";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) e.email = "Please enter a valid email address";
+    if (phone.trim().replace(/[\s\-+()\d]/g, "").length > 0 || phone.trim().replace(/\D/g, "").length < 7) e.phone = "Please enter a valid phone number";
+    return e;
+  }
+
+  function handleSubmit() {
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+    setSubmitted(true);
+    onSend(`Name: ${name.trim()}\nEmail: ${email.trim()}\nPhone: ${phone.trim()}`);
+  }
+
+  if (submitted) {
+    return (
+      <div className="guest-form-card guest-form-done">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+        Details submitted
+      </div>
+    );
+  }
+
+  return (
+    <div className="guest-form-card">
+      <p className="guest-form-title">Your details</p>
+      <div className="guest-form-field">
+        <label htmlFor="gf-name">Full name</label>
+        <input id="gf-name" type="text" autoComplete="name" value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="e.g. Kasun Perera" />
+        {errors.name && <span className="guest-form-error">{errors.name}</span>}
+      </div>
+      <div className="guest-form-field">
+        <label htmlFor="gf-email">Email address</label>
+        <input id="gf-email" type="email" autoComplete="email" value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="you@example.com" />
+        {errors.email && <span className="guest-form-error">{errors.email}</span>}
+      </div>
+      <div className="guest-form-field">
+        <label htmlFor="gf-phone">Phone number</label>
+        <input id="gf-phone" type="tel" autoComplete="tel" value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="+94 77 000 0000" />
+        {errors.phone && <span className="guest-form-error">{errors.phone}</span>}
+      </div>
+      <button className="guest-form-submit" onClick={handleSubmit}>Continue →</button>
+    </div>
+  );
+}
+
 // ── Existing event cards (booking / transfer confirmed / handoff) ─────────────
 const STATUS_LABEL = { pending: "Awaiting confirmation", confirmed: "Confirmed", cancelled: "Cancelled" };
 
@@ -326,6 +391,9 @@ export function EventCard({ event, onSend = () => {} }) {
   }
   if (event.type === "transfer_options") {
     return <TransferOptionsCard data={d} onSend={onSend} />;
+  }
+  if (event.type === "guest_details_form") {
+    return <GuestDetailsCard onSend={onSend} />;
   }
 
   if (event.type === "booking_created" || event.type === "booking_modified") {
@@ -617,7 +685,7 @@ function HistoryPanel({ sessions, currentSid, onSelect, onNewChat, onDelete }) {
   );
 }
 
-export default function ChatPanel({ slug, onClose, fill = false }) {
+export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "" }) {
   const [prop, setProp]         = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState("");
@@ -625,7 +693,7 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
   const [error, setError]       = useState("");
   const [maximize, setMaximize] = useState(false);
   const [lang, setLang]         = useState("en"); // "en" | "si" | "ta"
-  const [showPicker, setShowPicker] = useState(false);
+  const [pickerDismissedAtLength, setPickerDismissedAtLength] = useState(-1);
   const [historyCount, setHistoryCount] = useState(0); // messages loaded from server on open
   const [showHistory,  setShowHistory]  = useState(false);
   const [sessions,     setSessions]     = useState([]);
@@ -634,11 +702,47 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
   const [streamEvents,  setStreamEvents]  = useState([]);
   const streamContentRef = useRef("");
   const streamEventsRef  = useRef([]);
+  // Voice state
+  const [recording,    setRecording]    = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef   = useRef([]);
+  const lastWasVoiceRef  = useRef(false);
+  const audioContextRef  = useRef(null);
+  const analyserRef      = useRef(null);
+  const animFrameRef     = useRef(null);
+  const [audioLevels, setAudioLevels] = useState([]);
+  const BAR_COUNT = 16;
   const sessionKey  = `hc-session-${slug}`;
   const sessionsKey = `hc-sessions-${slug}`;
   const [sid, setSid] = useState("");
   const listRef  = useRef(null);
   const inputRef = useRef(null);
+
+  // Derived: show inline date picker when last AI message is asking for dates
+  const needsDates = (() => {
+    if (busy || messages.length === 0 || messages.length === pickerDismissedAtLength) return false;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant") return false;
+    return /check[- ]?in|check[- ]?out|arrival date|which dates?|what dates?|when.*you.*think|when.*are you|when.*would you|when.*you.*like|what.*dates|dates.*thinking|dates.*have in mind|how many nights|looking to book|book for|your stay|planning to stay|thinking of staying/i.test(last.content || "");
+  })();
+
+  // Derived: show inline guest-details form after room selection, until details are submitted
+  const needsGuestForm = (() => {
+    if (messages.length === 0) return false;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "user" && /^I'd like to book the /.test(m.content || "")) {
+        // Hide once details have been submitted
+        if (messages.slice(i + 1).some((m2) => m2.role === "user" && /^Name:/i.test(m2.content || ""))) return false;
+        // Hide if the agent already emitted a guest_details_form event card
+        const inMsgs   = messages.slice(i).some((m2) => m2.events?.some((e) => e.type === "guest_details_form"));
+        const inStream = streamEvents.some((e) => e.type === "guest_details_form");
+        return !inMsgs && !inStream;
+      }
+    }
+    return false;
+  })();
 
   useEffect(() => {
     let live = true;
@@ -661,6 +765,26 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
+  // Auto-send initial message once prop is loaded (e.g. from "Ask the concierge →" buttons)
+  const initialMsgSentRef = useRef(false);
+  useEffect(() => {
+    if (!prop || !initialMessage || initialMsgSentRef.current) return;
+    initialMsgSentRef.current = true;
+    setTimeout(() => send(initialMessage), 350);
+  }, [prop]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // scroll calendar into view when it appears
+  useEffect(() => {
+    if (!needsDates) return;
+    setTimeout(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }), 80);
+  }, [needsDates]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // scroll guest form into view when it appears
+  useEffect(() => {
+    if (!needsGuestForm) return;
+    setTimeout(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }), 80);
+  }, [needsGuestForm]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!maximize) return;
     const onKey = (e) => { if (e.key === "Escape") setMaximize(false); };
@@ -668,12 +792,6 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [maximize]);
 
-  useEffect(() => {
-    if (!showPicker) return;
-    const onKey = (e) => { if (e.key === "Escape") setShowPicker(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showPicker]);
 
   // Load session list for this property from localStorage
   useEffect(() => {
@@ -689,6 +807,97 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 140) + "px";
   }, []);
+
+  // ── Voice helpers ────────────────────────────────────────────────────────────
+  function _bestMime() {
+    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    return types.find(t => MediaRecorder.isTypeSupported(t)) || "";
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: _bestMime() });
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.start(100);
+      mediaRecorderRef.current = mr;
+
+      // Web Audio visualizer
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.8;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      audioContextRef.current = audioCtx;
+      analyserRef.current = analyser;
+      const dataArr = new Uint8Array(analyser.frequencyBinCount);
+      const draw = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArr);
+        setAudioLevels(Array.from({ length: BAR_COUNT }, (_, i) => dataArr[i + 1] / 255));
+        animFrameRef.current = requestAnimationFrame(draw);
+      };
+      draw();
+
+      setRecording(true);
+    } catch {
+      setError("Microphone access denied. Please allow mic access and try again.");
+    }
+  }
+
+  async function stopAndTranscribe() {
+    if (!mediaRecorderRef.current) return;
+    cancelAnimationFrame(animFrameRef.current);
+    analyserRef.current = null;
+    audioContextRef.current?.close().catch(() => {});
+    audioContextRef.current = null;
+    setAudioLevels([]);
+    setRecording(false);
+    const blob = await new Promise(resolve => {
+      mediaRecorderRef.current.onstop = () => {
+        const mime = mediaRecorderRef.current.mimeType || "audio/webm";
+        resolve(new Blob(audioChunksRef.current, { type: mime }));
+      };
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+    });
+    if (blob.size < 500) return;
+    setTranscribing(true);
+    try {
+      const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+      const fd = new FormData();
+      fd.append("audio", blob, `recording.${ext}`);
+      const res = await fetch(`/api/properties/${slug}/voice/stt`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("stt failed");
+      const { text } = await res.json();
+      if (text.trim()) {
+        lastWasVoiceRef.current = true;
+        await send(text.trim());
+      }
+    } catch {
+      setError("Could not understand audio. Please try again.");
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  async function speakText(text) {
+    if (!text.trim()) return;
+    try {
+      const res = await fetch(`/api/properties/${slug}/voice/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.slice(0, 1200) }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.play().catch(() => {});
+      audio.onended = () => URL.revokeObjectURL(url);
+    } catch {}
+  }
 
   async function send(text) {
     const msg = text.trim();
@@ -733,6 +942,10 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
             content: finalContent,
             events: finalEvents,
           }]);
+          if (lastWasVoiceRef.current && finalContent) {
+            lastWasVoiceRef.current = false;
+            speakText(finalContent);
+          }
           _clearStream();
 
         } else if (ev.type === "error") {
@@ -780,9 +993,7 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
   function applyDates(ci, co) {
     const nights = Math.round((new Date(co) - new Date(ci)) / 86400000);
     const text = `${fmtDate(ci, { day: "numeric", month: "short" })} – ${fmtDate(co, { day: "numeric", month: "short" })} (${nights} night${nights !== 1 ? "s" : ""})`;
-    setInput(prev => prev.trim() ? `${prev.trimEnd()} ${text}` : text);
-    setShowPicker(false);
-    setTimeout(() => { inputRef.current?.focus(); autoGrow(inputRef.current); }, 50);
+    send(text);
   }
 
   function restart() {
@@ -932,39 +1143,14 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
           </div>
         )}
 
-        {/* welcome screen — centered header, only for fresh sessions with no messages */}
+        {/* welcome screen — greeting only, no chips */}
         {prop && historyCount === 0 && messages.length === 0 && !busy && (
           <div className="chat-welcome">
             <div className="chat-welcome-ava" aria-hidden="true">{initials}</div>
             <p className="chat-welcome-name">{prop.assistant_name}</p>
             <p className="chat-welcome-sub">{prop.name}</p>
-
-            {lang === "en" ? (
-              <div className="chat-welcome-chips">
-                <button className="chat-welcome-chip" onClick={() => send("Check available rooms")}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                  <span>Check available rooms</span>
-                </button>
-                <button className="chat-welcome-chip" onClick={() => send("Book airport transfer")}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                  <span>Book airport transfer</span>
-                </button>
-                <button className="chat-welcome-chip" onClick={() => send("Things to do in Kandy")}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/></svg>
-                  <span>Things to do in Kandy</span>
-                </button>
-                <button className="chat-welcome-chip" onClick={() => send("View my booking")}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-                  <span>View my booking</span>
-                </button>
-              </div>
-            ) : (
-              <div className="chips chips-centered">
-                {chips.map((s) => (
-                  <button key={s} className={`chip${scriptClass(s)}`} onClick={() => send(s)}>{s}</button>
-                ))}
-              </div>
-            )}
+            <p className="chat-welcome-greeting">Ayubowan 🙏</p>
+            <p className="chat-welcome-hint">Ask me anything about your stay</p>
           </div>
         )}
 
@@ -1012,58 +1198,74 @@ export default function ChatPanel({ slug, onClose, fill = false }) {
           </div>
         )}
 
-        {prop && messages.length === 0 && !busy && !error && (
-          <div style={{display:"none"}} />
+        {needsDates && (
+          <div className="chat-inline-picker">
+            <DateRangePicker
+              onSelect={applyDates}
+              onClose={() => setPickerDismissedAtLength(messages.length)}
+            />
+          </div>
         )}
-      </div>
 
-      {showPicker && (
-        <DateRangePicker
-          onSelect={applyDates}
-          onClose={() => setShowPicker(false)}
-        />
-      )}
+        {needsGuestForm && <GuestDetailsCard onSend={send} />}
+      </div>
 
       {error && <p className="chat-error" role="alert">{error}</p>}
 
       {/* input bar */}
       <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-        <button
-          type="button"
-          className={`chat-cal-btn${showPicker ? " chat-cal-btn-active" : ""}`}
-          onClick={() => setShowPicker(v => !v)}
-          disabled={!prop}
-          aria-label="Pick dates"
-          title="Select check-in / check-out dates"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-        </button>
-        <textarea
-          ref={inputRef}
-          rows={1}
-          value={input}
-          maxLength={2000}
-          placeholder={
-            lang === "si" ? "ලියන්න… (සිංහල හෝ ඉංග්‍රීසි)" :
-            lang === "ta" ? "தட்டச்சு செய்யுங்கள்… (தமிழ் அல்லது ஆங்கிலம்)" :
-            "Ask about rooms, dates, transfers…"
-          }
-          aria-label="Your message"
-          lang={hasSinhala(input) ? "si" : hasTamil(input) ? "ta" : undefined}
-          onChange={(e) => { setInput(e.target.value); autoGrow(e.target); }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
-          }}
-          disabled={!prop}
-        />
-        {input.length > 1700 && (
+        {recording ? (
+          <div className="voice-visualizer-wrap" aria-label="Listening, tap mic to stop">
+            <div className="voice-bars" aria-hidden="true">
+              {Array.from({ length: BAR_COUNT }, (_, i) => (
+                <div
+                  key={i}
+                  className="voice-bar"
+                  style={{ height: `${Math.max(3, (audioLevels[i] || 0) * 44)}px` }}
+                />
+              ))}
+            </div>
+            <span className="voice-listening-label">Listening…</span>
+          </div>
+        ) : (
+          <textarea
+            ref={inputRef}
+            rows={1}
+            value={input}
+            maxLength={2000}
+            placeholder={
+              lang === "si" ? "ලියන්න… (සිංහල හෝ ඉංග්‍රීසි)" :
+              lang === "ta" ? "தட்டச்சு செய்யுங்கள்… (தமிழ் அல்லது ஆங்கிலம்)" :
+              "Ask about rooms, dates, transfers…"
+            }
+            aria-label="Your message"
+            lang={hasSinhala(input) ? "si" : hasTamil(input) ? "ta" : undefined}
+            onChange={(e) => { setInput(e.target.value); autoGrow(e.target); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
+            }}
+            disabled={!prop}
+          />
+        )}
+        {!recording && input.length > 1700 && (
           <span className="char-count" aria-live="polite">{2000 - input.length}</span>
         )}
+        <button
+          type="button"
+          className={`mic-btn${recording ? " mic-btn-recording" : ""}${transcribing ? " mic-btn-busy" : ""}`}
+          onClick={() => recording ? stopAndTranscribe() : startRecording()}
+          disabled={!prop || busy || transcribing}
+          aria-label={recording ? "Stop recording" : "Speak your message"}
+          title={recording ? "Tap to stop" : "Voice input"}
+        >
+          {transcribing ? (
+            <span className="adm-spinner" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "#fff" }} />
+          ) : recording ? (
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6"/></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6"/></svg>
+          )}
+        </button>
         <button className="send" type="submit" disabled={!input.trim() || busy || !prop} aria-label="Send">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={SEND_PATH} /></svg>
         </button>
