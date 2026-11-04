@@ -79,7 +79,7 @@ export default function BookingLookup() {
                   id="blk-ref"
                   value={ref}
                   onChange={e => setRef(e.target.value.toUpperCase())}
-                  placeholder="e.g. KH-ABCDEF"
+                  placeholder="e.g. LV-ABCDEF"
                   autoComplete="off"
                   autoFocus={!ref}
                   spellCheck={false}

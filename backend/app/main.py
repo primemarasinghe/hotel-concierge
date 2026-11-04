@@ -4,9 +4,10 @@ import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -211,7 +212,7 @@ def property_public(prop: Property = Depends(get_property)):
             "suggestions": [
                 "Check available rooms",
                 "Book airport transfer",
-                "Things to do in Kandy",
+                f"Things to do in {prop.location.split(',')[0]}",
                 "View my booking",
             ]}
 
@@ -858,3 +859,261 @@ def admin_send_reviews(prop: Property = Depends(get_property), db: Session = Dep
         b.review_email_sent = True
     db.commit()
     return {"sent": len(rows)}
+
+
+# ── Voice: speech-to-text (Whisper) ──────────────────────────────────────────
+@app.post("/api/properties/{slug}/voice/stt")
+async def voice_stt(slug: str, audio: UploadFile = File(...)):
+    if not settings.openai_api_key:
+        raise HTTPException(503, "OPENAI_API_KEY not configured")
+    data = await audio.read()
+    if len(data) < 500:
+        raise HTTPException(400, "Audio too short")
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    filename = audio.filename or "recording.webm"
+    mime = audio.content_type or "audio/webm"
+    transcript = await client.audio.transcriptions.create(
+        model="gpt-4o-transcribe",
+        file=(filename, data, mime),
+    )
+    return {"text": transcript.text}
+
+
+# ── Voice: text-to-speech (OpenAI TTS) ───────────────────────────────────────
+@app.post("/api/properties/{slug}/voice/tts")
+async def voice_tts(slug: str, body: dict):
+    if not settings.openai_api_key:
+        raise HTTPException(503, "OPENAI_API_KEY not configured")
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "text is required")
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    response = await client.audio.speech.create(
+        model="tts-1",
+        voice="nova",
+        input=text[:1500],
+    )
+    audio_bytes = await response.aread()
+    return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+# ── Voice: OpenAI Realtime WebSocket proxy ───────────────────────────────────
+
+_VOICE_TOOLS = [
+    {
+        "type": "function",
+        "name": "check_availability",
+        "description": "Check room availability for given dates and guest count. Call this as soon as the guest provides dates.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "check_in":   {"type": "string",  "description": "Check-in date YYYY-MM-DD"},
+                "check_out":  {"type": "string",  "description": "Check-out date YYYY-MM-DD"},
+                "adults":     {"type": "integer", "description": "Number of adults"},
+                "children":   {"type": "integer", "description": "Number of children"},
+                "meal_plan":  {"type": "string",  "description": "Meal plan code, default RO"},
+            },
+            "required": ["check_in", "check_out", "adults"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_quote",
+        "description": "Get a price quote for a specific room type after the guest selects one.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "room_type_code": {"type": "string"},
+                "check_in":       {"type": "string"},
+                "check_out":      {"type": "string"},
+                "adults":         {"type": "integer"},
+                "children":       {"type": "integer"},
+                "meal_plan":      {"type": "string"},
+            },
+            "required": ["room_type_code", "check_in", "check_out", "adults"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "create_reservation",
+        "description": "Create a confirmed reservation after the guest approves the quote.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "room_type_code": {"type": "string"},
+                "check_in":       {"type": "string"},
+                "check_out":      {"type": "string"},
+                "adults":         {"type": "integer"},
+                "children":       {"type": "integer"},
+                "meal_plan":      {"type": "string"},
+                "guest_name":     {"type": "string"},
+                "guest_email":    {"type": "string"},
+                "guest_phone":    {"type": "string"},
+                "guest_confirmed":{"type": "boolean"},
+            },
+            "required": ["room_type_code", "check_in", "check_out", "adults", "guest_name", "guest_email", "guest_confirmed"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "request_guest_details",
+        "description": "Show the guest a form to collect name, email, and phone. Call this after the guest selects a room.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+]
+
+
+@app.websocket("/api/properties/{slug}/voice/realtime")
+async def voice_realtime_ws(websocket: WebSocket, slug: str, db: Session = Depends(get_db)):
+    """Proxy WebSocket between browser and OpenAI Realtime API.
+    Intercepts function calls, executes them via ConciergeAgent, and forwards
+    resulting events to the browser as agent.event messages."""
+    import websockets as ws_lib
+    from uuid import uuid4
+
+    await websocket.accept()
+
+    if not settings.openai_api_key:
+        await websocket.send_text(json.dumps({"type": "error", "error": {
+            "message": "OPENAI_API_KEY not configured."
+        }}))
+        await websocket.close()
+        return
+
+    prop = db.query(Property).filter(Property.slug == slug).first()
+    if not prop:
+        await websocket.send_text(json.dumps({"type": "error", "error": {"message": "Property not found."}}))
+        await websocket.close()
+        return
+
+    temp_conv = Conversation(id=str(uuid4()), property_id=prop.id)
+    agent = ConciergeAgent(db, prop, temp_conv)
+    instructions = agent.system_prompt("en")
+
+    oai_url = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
+    oai_headers = [("Authorization", f"Bearer {settings.openai_api_key}")]
+
+    try:
+        async with ws_lib.connect(oai_url, additional_headers=oai_headers) as oai_ws:
+            await oai_ws.send(json.dumps({
+                "type": "session.update",
+                "session": {
+                    "type": "realtime",
+                    "instructions": instructions,
+                    "tools": _VOICE_TOOLS,
+                    "tool_choice": "auto",
+                },
+            }))
+
+            # Accumulates a single in-flight function call
+            pending_call: dict | None = None
+
+            async def _execute_tool(call: dict):
+                name = call["name"]
+                call_id = call["call_id"]
+                try:
+                    args = json.loads(call.get("arguments", "{}"))
+                except Exception:
+                    args = {}
+
+                prev = len(agent.events)
+                result: dict = {}
+                try:
+                    if name == "check_availability":
+                        result = agent._check_availability(**args)
+                    elif name == "get_quote":
+                        result = agent._get_quote(**args)
+                    elif name == "create_reservation":
+                        result = agent._create_reservation(**{**args, "guest_confirmed": args.get("guest_confirmed", True)})
+                    elif name == "request_guest_details":
+                        result = agent._request_guest_details()
+                    else:
+                        result = {"error": f"Unknown tool: {name}"}
+                except Exception as exc:
+                    result = {"error": str(exc)}
+
+                # Forward any events the agent emitted to the browser
+                for ev in agent.events[prev:]:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "agent.event", "event": ev}))
+                    except Exception:
+                        pass
+
+                # Return result to OpenAI and trigger continuation
+                await oai_ws.send(json.dumps({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": json.dumps(result),
+                    },
+                }))
+                await oai_ws.send(json.dumps({"type": "response.create"}))
+
+            async def _from_browser():
+                try:
+                    while True:
+                        msg = await websocket.receive_text()
+                        await oai_ws.send(msg)
+                except (WebSocketDisconnect, Exception):
+                    pass
+
+            async def _from_openai():
+                nonlocal pending_call
+                try:
+                    async for msg in oai_ws:
+                        text = msg if isinstance(msg, str) else msg.decode()
+                        try:
+                            ev = json.loads(text)
+                        except Exception:
+                            await websocket.send_text(text)
+                            continue
+
+                        t = ev.get("type", "")
+
+                        # Accumulate function call arguments — don't forward raw deltas
+                        if t == "response.function_call_arguments.delta":
+                            if pending_call is None:
+                                pending_call = {
+                                    "name": ev.get("name", ""),
+                                    "call_id": ev.get("call_id", ""),
+                                    "arguments": "",
+                                }
+                            pending_call["arguments"] += ev.get("delta", "")
+                            continue
+
+                        if t == "response.function_call_arguments.done":
+                            if pending_call is None:
+                                pending_call = {"name": "", "call_id": ev.get("call_id", ""), "arguments": ""}
+                            pending_call["name"] = ev.get("name", pending_call.get("name", ""))
+                            pending_call["arguments"] = ev.get("arguments", pending_call["arguments"])
+                            call = pending_call
+                            pending_call = None
+                            await _execute_tool(call)
+                            continue
+
+                        await websocket.send_text(text)
+
+                except Exception:
+                    pass
+
+            t1 = asyncio.create_task(_from_browser())
+            t2 = asyncio.create_task(_from_openai())
+            _, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
+
+    except Exception as e:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "error": {"message": str(e)}}))
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass

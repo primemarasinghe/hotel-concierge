@@ -19,11 +19,17 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://hotel:hotel@db:5432/hotel
+      GOOGLE_APPLICATION_CREDENTIALS: /app/service-account.json
+    volumes:
+      - ./backend/service-account.json:/app/service-account.json:ro
     depends_on:
       db:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     # seed is idempotent: upserts properties from data/ and re-embeds knowledge on each start
-    command: sh -c "python -m app.seed --demo && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
 

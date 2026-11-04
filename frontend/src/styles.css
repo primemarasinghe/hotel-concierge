@@ -618,6 +618,117 @@ a { color: var(--accent); }
   letter-spacing: 0.02em;
 }
 
+/* ── Voice agent inline cards ── */
+.va-event-card {
+  background: #f8f9f8;
+  border: 1px solid #e8ebe8;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.va-event-card-title {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #666;
+}
+.va-room-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #eee;
+}
+.va-room-row:last-of-type { border-bottom: none; }
+.va-room-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.va-room-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.va-room-rate {
+  font-size: 0.72rem;
+  color: #666;
+}
+.va-room-rate small { font-size: 0.65rem; }
+.va-room-select {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.va-room-select:hover { opacity: 0.85; }
+
+.va-quote-rows { display: flex; flex-direction: column; gap: 0; margin-bottom: 10px; }
+.va-quote-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+.va-quote-row:last-child { border-bottom: none; }
+.va-quote-row span:first-child { color: #888; }
+.va-quote-total { font-weight: 700; font-size: 0.82rem; }
+.va-quote-total span:last-child { color: #111; }
+
+.va-confirm-btn {
+  width: 100%;
+  padding: 9px 0;
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: 4px;
+}
+.va-confirm-btn:hover { opacity: 0.85; }
+
+.va-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.va-form-field label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.va-form-field input {
+  padding: 7px 9px;
+  border: 1.5px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.va-form-field input:focus { border-color: var(--accent, #2f5d3a); }
+.va-form-err { font-size: 0.68rem; color: #c0392b; }
+
 /* ── Voice waveform visualizer ── */
 .voice-visualizer-wrap {
   flex: 1;

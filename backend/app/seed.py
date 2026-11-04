@@ -85,7 +85,7 @@ def add_demo_activity(db, prop: Property) -> None:
                        adults=ad, children=ch, units=1, meal_plan=q["meal_plan"], total_amount=q["total"],
                        currency=prop.currency, status=status, source="demo"))
 
-    # A completed stay — useful for testing post-stay review email
+    # A completed stay — shown in dashboard history; email flagged sent so scheduler skips it
     rt_past = rts[1]
     ci_past = today - timedelta(days=5)
     q_past = svc.quote(db, prop, rt_past, ci_past, ci_past + timedelta(days=3), 2, 0, 1, "BB" if "BB" in prop.meal_plans else "RO")
@@ -93,8 +93,8 @@ def add_demo_activity(db, prop: Property) -> None:
                    guest_name="Aiko Tanaka", email="aiko@example.com", phone="+81 80 0000 0001",
                    check_in=ci_past, check_out=ci_past + timedelta(days=3),
                    adults=2, children=0, units=1, meal_plan=q_past["meal_plan"], total_amount=q_past["total"],
-                   currency=prop.currency, status="confirmed", source="demo", review_email_sent=False))
-    # James Wilson — confirmed booking arriving in 2 days (for pre-arrival email testing)
+                   currency=prop.currency, status="confirmed", source="demo", review_email_sent=True))
+    # Upcoming confirmed booking — shown in arrivals; email flagged sent so scheduler skips it
     rt_jw = rts[1]
     ci_jw = today + timedelta(days=2)
     q_jw = svc.quote(db, prop, rt_jw, ci_jw, ci_jw + timedelta(days=3), 2, 0, 1, "BB" if "BB" in prop.meal_plans else "RO")
@@ -103,7 +103,7 @@ def add_demo_activity(db, prop: Property) -> None:
                    check_in=ci_jw, check_out=ci_jw + timedelta(days=3),
                    adults=2, children=0, units=1, meal_plan=q_jw["meal_plan"], total_amount=q_jw["total"],
                    currency=prop.currency, status="confirmed", source="demo",
-                   pre_arrival_email_sent=False))
+                   pre_arrival_email_sent=True))
 
     opt = db.scalar(select(TransferOption).where(TransferOption.property_id == prop.id,
                                                  TransferOption.direction == "arrival").order_by(TransferOption.price))
@@ -128,13 +128,13 @@ def add_demo_promos(db, prop: Property) -> None:
     if db.scalar(select(PromoCode).where(PromoCode.property_id == prop.id).limit(1)):
         return
     promos = [
-        PromoCode(property_id=prop.id, code="KANDY10", description="10% off your stay",
+        PromoCode(property_id=prop.id, code="LV10", description="10% off your stay",
                   discount_type="pct", discount_value=10, active=True),
         PromoCode(property_id=prop.id, code="WELCOME2000", description="LKR 2,000 welcome discount",
                   discount_type="fixed", discount_value=2000, active=True),
-        PromoCode(property_id=prop.id, code="ESALA25", description="Esala Festival 25% off (3+ nights)",
-                  discount_type="pct", discount_value=25, min_nights=3,
-                  valid_from=date(2027, 7, 1), valid_to=date(2027, 8, 31), active=True),
+        PromoCode(property_id=prop.id, code="SIGIRIYA20", description="Dry Season 20% off (2+ nights)",
+                  discount_type="pct", discount_value=20, min_nights=2,
+                  valid_from=date(2027, 1, 8), valid_to=date(2027, 3, 31), active=True),
     ]
     db.add_all(promos)
     db.commit()

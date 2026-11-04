@@ -1224,7 +1224,7 @@ function PromoCodes({ a, slug, toast }) {
               <label htmlFor="pf-code">Code *</label>
               <input
                 id="pf-code" required
-                placeholder="e.g. KANDY10"
+                placeholder="e.g. LV10"
                 value={form.code}
                 onChange={e => set("code", e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
                 style={{ fontFamily: "monospace", letterSpacing: "0.05em" }}

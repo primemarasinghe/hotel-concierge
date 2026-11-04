@@ -1,0 +1,223 @@
+{
+  "property": {
+    "slug": "leisureville-sigiriya",
+    "name": "Leisureville Sigiriya",
+    "kind": "holiday bungalow",
+    "location": "Sigiriya, North Central Province, Sri Lanka",
+    "currency": "LKR",
+    "timezone": "Asia/Colombo",
+    "check_in_time": "14:00",
+    "check_out_time": "11:00",
+    "tax_pct": 18,
+    "service_charge_pct": 10,
+    "weekend_uplift_pct": 0,
+    "weekend_days": [4, 5],
+    "meal_plans": {"RO": 0},
+    "contact": {
+      "phone": "+94 11 202 1340",
+      "whatsapp": "+94 11 202 1340",
+      "email": "leisureville@sltmobitel.lk",
+      "accent": "#8B6914",
+      "review_url": "https://www.sltmobitel.lk"
+    },
+    "assistant_name": "Siri",
+    "tone": "warm, friendly Sri Lankan hospitality; helpful and informative",
+    "reference_prefix": "LV",
+    "free_cancellation_days": 7,
+    "max_stay_nights": 14
+  },
+  "room_types": [
+    {
+      "code": "MB",
+      "name": "Master Bedroom",
+      "description": "Spacious air-conditioned master bedroom with a king bed, en-suite bathroom and a private veranda overlooking the tropical garden.",
+      "max_adults": 2,
+      "max_children": 2,
+      "beds": "1 king bed",
+      "size_sqm": 24,
+      "amenities": ["air conditioning", "Wi-Fi", "en-suite bathroom", "wardrobe", "ceiling fan", "hot water"],
+      "base_rate": 10000,
+      "total_units": 1,
+      "image_url": "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80"
+    },
+    {
+      "code": "BR2",
+      "name": "Bedroom 2",
+      "description": "Comfortable air-conditioned bedroom with two twin beds, ideal for friends or siblings sharing a room.",
+      "max_adults": 4,
+      "max_children": 2,
+      "beds": "2 twin beds",
+      "size_sqm": 20,
+      "amenities": ["air conditioning", "Wi-Fi", "shared bathroom", "wardrobe", "ceiling fan", "hot water"],
+      "base_rate": 10000,
+      "total_units": 1,
+      "image_url": "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80"
+    },
+    {
+      "code": "BR3",
+      "name": "Bedroom 3",
+      "description": "Comfortable air-conditioned bedroom with two twin beds, overlooking the garden with views of the surrounding paddy fields.",
+      "max_adults": 4,
+      "max_children": 2,
+      "beds": "2 twin beds",
+      "size_sqm": 20,
+      "amenities": ["air conditioning", "Wi-Fi", "shared bathroom", "wardrobe", "ceiling fan", "hot water"],
+      "base_rate": 10000,
+      "total_units": 1,
+      "image_url": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80"
+    }
+  ],
+  "seasons": [
+    {
+      "name": "Festive Peak",
+      "start_date": "2026-12-20",
+      "end_date": "2027-01-07",
+      "multiplier": 1.3,
+      "min_nights": 2
+    },
+    {
+      "name": "Dry Season (Jan–Mar)",
+      "start_date": "2027-01-08",
+      "end_date": "2027-03-31",
+      "multiplier": 1.1,
+      "min_nights": 1
+    },
+    {
+      "name": "Green Season (May–Aug)",
+      "start_date": "2027-05-01",
+      "end_date": "2027-08-31",
+      "multiplier": 0.9,
+      "min_nights": 1
+    }
+  ],
+  "transfers": [
+    {
+      "route": "Bandaranaike Int'l Airport (CMB) → Bungalow",
+      "direction": "arrival",
+      "vehicle": "Sedan car",
+      "max_pax": 3,
+      "max_bags": 3,
+      "price": 25000,
+      "duration_min": 240
+    },
+    {
+      "route": "Bandaranaike Int'l Airport (CMB) → Bungalow",
+      "direction": "arrival",
+      "vehicle": "Air-conditioned van",
+      "max_pax": 10,
+      "max_bags": 10,
+      "price": 35000,
+      "duration_min": 240
+    },
+    {
+      "route": "Bungalow → Bandaranaike Int'l Airport (CMB)",
+      "direction": "departure",
+      "vehicle": "Sedan car",
+      "max_pax": 3,
+      "max_bags": 3,
+      "price": 25000,
+      "duration_min": 240
+    },
+    {
+      "route": "Bungalow → Bandaranaike Int'l Airport (CMB)",
+      "direction": "departure",
+      "vehicle": "Air-conditioned van",
+      "max_pax": 10,
+      "max_bags": 10,
+      "price": 35000,
+      "duration_min": 240
+    },
+    {
+      "route": "Kandy → Bungalow",
+      "direction": "arrival",
+      "vehicle": "Sedan car",
+      "max_pax": 3,
+      "max_bags": 3,
+      "price": 8000,
+      "duration_min": 90
+    },
+    {
+      "route": "Bungalow → Kandy",
+      "direction": "departure",
+      "vehicle": "Sedan car",
+      "max_pax": 3,
+      "max_bags": 3,
+      "price": 8000,
+      "duration_min": 90
+    }
+  ],
+  "experiences": [
+    {
+      "name": "Sigiriya Rock Fortress guided climb",
+      "category": "culture",
+      "description": "Guided climb of the UNESCO-listed Lion Rock fortress, taking in the famous frescoes, ancient mirror wall and landscaped water gardens at the base.",
+      "duration": "3 hours",
+      "price": 6500,
+      "tags": ["sigiriya", "UNESCO", "history", "climbing", "photography"],
+      "family_friendly": true
+    },
+    {
+      "name": "Pidurangala Rock sunrise hike",
+      "category": "adventure",
+      "description": "Early-morning hike to the summit of Pidurangala for the most iconic panoramic view of Sigiriya Rock at sunrise — a photographer's dream.",
+      "duration": "2 hours",
+      "price": 4000,
+      "tags": ["sunrise", "hiking", "photography", "sigiriya", "adventure"],
+      "family_friendly": false
+    },
+    {
+      "name": "Dambulla Cave Temple visit",
+      "category": "culture",
+      "description": "Guided tour of the Golden Temple of Dambulla — five cave shrines containing over 150 Buddha statues and vivid ancient murals (20 km south).",
+      "duration": "2 hours",
+      "price": 5000,
+      "tags": ["culture", "religion", "history", "UNESCO", "temple"],
+      "family_friendly": true
+    },
+    {
+      "name": "Minneriya National Park elephant safari",
+      "category": "nature",
+      "description": "Jeep safari to Minneriya, home to Sri Lanka's famous elephant gathering — often 200+ wild elephants in one place around the ancient tank.",
+      "duration": "4 hours",
+      "price": 15000,
+      "tags": ["elephants", "safari", "wildlife", "nature", "photography"],
+      "family_friendly": true
+    },
+    {
+      "name": "Hiriwadunna village & lake tour",
+      "category": "culture",
+      "description": "Bullock-cart ride through the village, a boat trip on the ancient reservoir and a home-cooked Sri Lankan lunch with a local family.",
+      "duration": "4 hours",
+      "price": 7500,
+      "tags": ["village", "culture", "lake", "food", "authentic"],
+      "family_friendly": true
+    },
+    {
+      "name": "Cycling through Sigiriya paddy fields",
+      "category": "adventure",
+      "description": "Leisurely bicycle tour through the green paddy fields, village paths and rural landscape surrounding the fortress.",
+      "duration": "2 hours",
+      "price": 3500,
+      "tags": ["cycling", "nature", "relaxed", "photography", "village"],
+      "family_friendly": true
+    },
+    {
+      "name": "Polonnaruwa Ancient City day trip",
+      "category": "culture",
+      "description": "Full-day guided tour of Polonnaruwa — Sri Lanka's best-preserved ancient royal city with palaces, dagobas and colossal Buddha statues (60 km east).",
+      "duration": "Full day",
+      "price": 18000,
+      "tags": ["history", "UNESCO", "archaeology", "culture", "day trip"],
+      "family_friendly": true
+    },
+    {
+      "name": "Ayurveda herbal garden walk",
+      "category": "wellness",
+      "description": "Guided walk through a local Ayurvedic herb garden with a practitioner explaining traditional Sri Lankan herbal medicine and treatments.",
+      "duration": "1.5 hours",
+      "price": 2500,
+      "tags": ["ayurveda", "wellness", "nature", "culture", "relaxed"],
+      "family_friendly": true
+    }
+  ]
+}
