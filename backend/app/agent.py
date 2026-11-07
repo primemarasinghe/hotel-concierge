@@ -135,6 +135,8 @@ class ConciergeAgent:
     def _check_availability(self, check_in, check_out, adults, children=0, meal_plan="RO"):
         results = svc.search_availability(self.db, self.prop, _d(check_in), _d(check_out), adults, children, meal_plan)
         nights = (_d(check_out) - _d(check_in)).days
+        available = [r for r in results if r.get("available")]
+        # Event card only shows available rooms (UI renders image_url)
         self.events.append({
             "type": "availability_results",
             "data": {
@@ -145,12 +147,11 @@ class ConciergeAgent:
                 "children": children,
                 "meal_plan": meal_plan,
                 "currency": self.prop.currency,
-                "rooms": results,
+                "rooms": available,
             }
         })
-        # Strip image_url from LLM context — it's already in the event card;
-        # returning it causes the model to emit markdown image syntax in text.
-        return [{k: v for k, v in r.items() if k != "image_url"} for r in results]
+        # Return only available rooms to the AI — no need to explain unavailable ones
+        return [{k: v for k, v in r.items() if k != "image_url"} for r in available]
 
     def _validate_promo_code(self, code: str, nights: int):
         try:
@@ -188,6 +189,9 @@ class ConciergeAgent:
     def _create_reservation(self, guest_confirmed, **kw):
         if not guest_confirmed:
             return NEEDS_CONFIRM
+        # AI tool uses guest_email/guest_phone; service layer expects email/phone
+        kw["email"] = kw.pop("guest_email", kw.pop("email", ""))
+        kw["phone"] = kw.pop("guest_phone", kw.pop("phone", ""))
         b = svc.create_booking(self.db, self.prop, check_in=_d(kw.pop("check_in")),
                                check_out=_d(kw.pop("check_out")), session_id=self.conv.id, **kw)
         out = svc.booking_summary(b)

@@ -401,47 +401,72 @@ a { color: var(--accent); }
   transform: scale(1.06);
 }
 
-/* ── Voice Agent popup ── */
+/* ── Voice Agent ── */
 .va-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1100;
-  padding: 24px;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
 }
-.va-card {
-  background: var(--surface);
-  border-radius: 28px;
-  width: 360px;
-  max-width: 100%;
-  padding: 36px 28px 28px;
+
+/* Two-column modal */
+.va-modal {
+  display: flex;
+  width: min(1060px, 100%);
+  height: min(680px, calc(100dvh - 32px));
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55), 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ── LEFT panel: dark voice area ── */
+.va-left {
+  width: 380px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  background: #19281c;
+  padding: 20px 20px 20px;
   position: relative;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.28), 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
 }
+
+/* ── RIGHT panel: white card area ── */
+.va-right {
+  flex: 1;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 36px;
+  overflow-y: auto;
+}
+
+/* Close button */
 .va-close {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 1.5px solid var(--line);
-  background: var(--paper);
-  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
   display: grid;
   place-items: center;
   transition: background 0.15s, color 0.15s;
+  z-index: 1;
 }
-.va-close:hover { background: var(--line); color: var(--ink); }
+.va-close:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
 
 /* Orb */
 .va-orb-wrap {
@@ -450,284 +475,360 @@ a { color: var(--accent); }
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  margin-bottom: 2px;
+  margin-top: 10px;
 }
-.va-orb-canvas {
-  width: 100%;
-  height: 100%;
-}
+.va-orb-canvas { width: 100%; height: 100%; }
 
-/* Avatar (kept for fallback) */
-.va-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font: 700 2rem/1 var(--ui);
-  display: grid;
-  place-items: center;
-  transition: box-shadow 0.4s ease;
-  margin-bottom: 2px;
-}
-.va-avatar-speaking {
-  animation: va-speak-ring 1.6s ease-in-out infinite;
-}
-@keyframes va-speak-ring {
-  0%, 100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent),
-                0 0 0 0 color-mix(in srgb, var(--accent) 15%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 20%, transparent),
-                0 0 0 20px color-mix(in srgb, var(--accent) 7%, transparent);
-  }
-}
+/* Name / hotel */
 .va-name {
-  margin: 0;
-  font: 700 1.05rem/1.2 var(--ui);
-  color: var(--ink);
+  margin: 14px 0 2px;
+  font: 700 1.1rem/1.2 var(--ui);
+  color: #fff;
+  letter-spacing: 0.01em;
 }
 .va-hotel {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--muted);
+  margin: 0 0 4px;
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.42);
+  letter-spacing: 0.03em;
 }
+
+/* Status */
+.va-status {
+  margin: 0 0 10px;
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.32);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  min-height: 1.1em;
+}
+.va-status-active { color: #6dcc8a; font-weight: 600; }
 
 /* Transcript */
 .va-transcript {
+  flex: 1;
   width: 100%;
-  min-height: 90px;
-  max-height: 160px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 12px;
-  background: var(--paper);
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  margin-top: 4px;
+  gap: 8px;
+  padding: 2px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 .va-transcript-empty {
   margin: auto;
-  font-size: 0.78rem;
-  color: var(--muted);
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.22);
   text-align: center;
+  line-height: 1.6;
+  padding: 0 8px;
 }
+
+/* Messages */
 .va-msg { display: flex; }
-.va-msg-user  { justify-content: flex-end; }
+.va-msg-user { justify-content: flex-end; }
 .va-msg-assistant { justify-content: flex-start; }
 .va-msg-text {
-  padding: 6px 11px;
+  padding: 8px 12px;
   border-radius: 14px;
   font-size: 0.82rem;
-  line-height: 1.45;
-  max-width: 88%;
+  line-height: 1.5;
+  max-width: 86%;
 }
 .va-msg-user .va-msg-text {
-  background: var(--accent);
+  background: var(--accent, #2f5d3a);
   color: #fff;
   border-radius: 14px 14px 3px 14px;
 }
 .va-msg-assistant .va-msg-text {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.84);
   border-radius: 3px 14px 14px 14px;
 }
 
-/* Wave area */
-.va-wave-area {
-  height: 56px;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.va-bars {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 52px;
-}
-.va-bar {
-  width: 3px;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: height 0.07s ease-out;
-  min-height: 3px;
-}
-.va-status {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-  font-weight: 500;
-}
-.va-status-active {
-  color: var(--accent);
-  font-weight: 600;
-}
+/* Error */
 .va-error {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #dc2626;
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: #ff7979;
+  background: rgba(220, 38, 38, 0.12);
+  border-radius: 8px;
+  padding: 6px 12px;
   text-align: center;
+  width: 100%;
+}
+
+/* Controls */
+.va-controls {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 14px;
+  width: 100%;
 }
 
 /* Mic button */
 .va-mic {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   border: none;
-  background: var(--accent);
+  background: rgba(255, 255, 255, 0.11);
   color: #fff;
   display: grid;
   place-items: center;
-  transition: background 0.15s, transform 0.12s;
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent);
-  margin-top: 4px;
+  transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
-.va-mic:hover:not(:disabled) { transform: scale(1.07); }
+.va-mic:hover:not(:disabled) { transform: scale(1.07); background: rgba(255, 255, 255, 0.2); }
 .va-mic:active:not(:disabled) { transform: scale(0.95); }
-.va-mic:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+.va-mic:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
 .va-mic-recording {
   background: #dc2626 !important;
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4) !important;
-  animation: mic-pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 4px 22px rgba(220, 38, 38, 0.5) !important;
+  animation: mic-pulse 1.4s ease-in-out infinite;
 }
-.va-mic-busy {
-  background: color-mix(in srgb, var(--accent) 65%, #000) !important;
-  box-shadow: none !important;
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 4px 22px rgba(220, 38, 38, 0.5); }
+  50%       { box-shadow: 0 4px 34px rgba(220, 38, 38, 0.7); }
 }
+.va-mic-busy { background: rgba(255, 255, 255, 0.07) !important; box-shadow: none !important; }
+
 .va-spinner {
   display: block;
-  width: 24px;
-  height: 24px;
-  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  width: 22px; height: 22px;
+  border: 2.5px solid rgba(255, 255, 255, 0.25);
   border-top-color: #fff;
   border-radius: 50%;
   animation: adm-spin 0.75s linear infinite;
 }
 .va-hint {
   margin: 0;
-  font-size: 0.7rem;
-  color: var(--muted);
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.28);
+  letter-spacing: 0.03em;
   min-height: 1em;
-  letter-spacing: 0.02em;
 }
 
-/* ── Voice agent inline cards ── */
-.va-event-card {
-  background: #f8f9f8;
-  border: 1px solid #e8ebe8;
+/* ── RIGHT panel: empty / tip state ── */
+.va-right-empty {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.va-right-empty-title {
+  font: 700 1.6rem/1.2 var(--display);
+  margin: 0 0 4px;
+}
+.va-right-empty-sub {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0 0 28px;
+}
+.va-right-tips {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.va-right-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.va-right-tip-icon {
+  width: 38px; height: 38px;
   border-radius: 10px;
-  padding: 12px 14px;
-  margin-top: 10px;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.va-right-tip-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 2px;
+}
+.va-right-tip-desc {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0;
+  font-style: italic;
+}
+
+/* ── RIGHT panel: card wrapper ── */
+.va-card-panel {
+  width: 100%;
+  max-width: 460px;
+}
+
+/* Voice cards */
+.va-event-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px 24px;
   width: 100%;
   box-sizing: border-box;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.07);
+}
+.va-card-dates {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: -8px 0 14px;
 }
 .va-event-card-title {
-  margin: 0 0 10px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  margin: 0 0 14px;
+  font: 700 0.68rem/1 var(--ui);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #666;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.va-room-card {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+.va-room-card:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.va-room-img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  display: block;
 }
 .va-room-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid #eee;
+  gap: 12px;
 }
-.va-room-row:last-of-type { border-bottom: none; }
+.va-room-sleeps {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 1px;
+}
 .va-room-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .va-room-name {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #111;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
 }
-.va-room-rate {
-  font-size: 0.72rem;
-  color: #666;
-}
-.va-room-rate small { font-size: 0.65rem; }
+.va-room-rate { font-size: 0.8rem; color: var(--muted); }
+.va-room-rate small { font-size: 0.7rem; }
 .va-room-select {
   flex-shrink: 0;
-  padding: 5px 12px;
+  padding: 9px 20px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, transform 0.1s;
 }
-.va-room-select:hover { opacity: 0.85; }
+.va-room-select:hover { opacity: 0.86; transform: scale(1.02); }
 
-.va-quote-rows { display: flex; flex-direction: column; gap: 0; margin-bottom: 10px; }
+.va-quote-rows { display: flex; flex-direction: column; gap: 0; margin-bottom: 18px; }
 .va-quote-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
-  padding: 5px 0;
-  border-bottom: 1px solid #eee;
-  color: #333;
+  align-items: center;
+  font-size: 0.86rem;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
 }
 .va-quote-row:last-child { border-bottom: none; }
-.va-quote-row span:first-child { color: #888; }
-.va-quote-total { font-weight: 700; font-size: 0.82rem; }
-.va-quote-total span:last-child { color: #111; }
+.va-quote-row span:first-child { color: var(--muted); }
+.va-quote-total { font-weight: 700; font-size: 0.98rem; }
 
 .va-confirm-btn {
   width: 100%;
-  padding: 9px 0;
+  padding: 13px 0;
   border: none;
-  border-radius: 7px;
+  border-radius: 10px;
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s;
-  margin-top: 4px;
+  transition: opacity 0.15s, transform 0.1s;
+  letter-spacing: 0.02em;
 }
-.va-confirm-btn:hover { opacity: 0.85; }
+.va-confirm-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.va-confirm-btn:active { transform: translateY(0); }
 
 .va-form-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 14px;
 }
 .va-form-field label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #666;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 .va-form-field input {
-  padding: 7px 9px;
-  border: 1.5px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.78rem;
+  padding: 11px 13px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.9rem;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  color: var(--ink);
 }
-.va-form-field input:focus { border-color: var(--accent, #2f5d3a); }
-.va-form-err { font-size: 0.68rem; color: #c0392b; }
+.va-form-field input:focus {
+  border-color: var(--accent, #2f5d3a);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #2f5d3a) 12%, transparent);
+}
+.va-form-err { font-size: 0.72rem; color: #dc2626; margin-top: 2px; }
+
+.va-booking-done-icon {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: #e8f5ed;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+  .va-modal {
+    flex-direction: column;
+    height: min(calc(100dvh - 24px), 820px);
+    border-radius: 16px;
+  }
+  .va-left {
+    width: 100%;
+    padding: 16px 16px 12px;
+  }
+  .va-orb-wrap { width: 110px; height: 110px; margin-top: 4px; }
+  .va-transcript { max-height: 110px; }
+  .va-right { padding: 20px; }
+  .va-right-empty-title { font-size: 1.2rem; }
+}
 
 /* ── Voice waveform visualizer ── */
 .voice-visualizer-wrap {

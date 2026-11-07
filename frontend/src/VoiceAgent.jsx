@@ -25,31 +25,40 @@ function b64ToF32(b64) {
   return f32;
 }
 
-function fmt(n) {
-  return n?.toLocaleString() ?? "—";
-}
+function fmt(n) { return n?.toLocaleString() ?? "—"; }
 
-// ── Inline cards ──────────────────────────────────────────────────────────────
+// ── Card components (displayed in the right panel) ────────────────────────────
 
 function VoiceAvailabilityCard({ data, accent, onSelect }) {
   return (
     <div className="va-event-card">
       <p className="va-event-card-title">Available Rooms</p>
+      <p className="va-card-dates">
+        {data.check_in} → {data.check_out}
+        {data.adults ? ` · ${data.adults} adult${data.adults !== 1 ? "s" : ""}` : ""}
+        {data.children ? ` · ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}
+      </p>
       {(data.rooms || []).map((r) => (
-        <div key={r.room_type} className="va-room-row">
-          <div className="va-room-info">
-            <span className="va-room-name">{r.name}</span>
-            <span className="va-room-rate">
-              {data.currency} {fmt(r.rate_per_night)}<small>/night</small>
-            </span>
+        <div key={r.room_type} className="va-room-card">
+          {r.image_url && (
+            <img src={r.image_url} alt={r.name} className="va-room-img" loading="lazy" />
+          )}
+          <div className="va-room-row">
+            <div className="va-room-info">
+              <span className="va-room-name">{r.name}</span>
+              <span className="va-room-rate">
+                {data.currency} {fmt(r.avg_per_night)}<small>/night</small>
+              </span>
+              {r.sleeps && <span className="va-room-sleeps">{r.sleeps}</span>}
+            </div>
+            <button
+              className="va-room-select"
+              style={{ background: accent }}
+              onClick={() => onSelect(r, data)}
+            >
+              Select
+            </button>
           </div>
-          <button
-            className="va-room-select"
-            style={{ background: accent }}
-            onClick={() => onSelect(r, data)}
-          >
-            Select
-          </button>
         </div>
       ))}
     </div>
@@ -76,7 +85,7 @@ function VoiceQuoteCard({ data, accent, onConfirm }) {
         style={{ background: accent }}
         onClick={() => onConfirm(data)}
       >
-        ✓ Confirm Booking
+        Confirm Booking
       </button>
     </div>
   );
@@ -109,7 +118,13 @@ function VoiceGuestForm({ accent, onSubmit }) {
   if (done) {
     return (
       <div className="va-event-card">
-        <p className="va-event-card-title" style={{ color: accent }}>✓ Details submitted</p>
+        <div className="va-booking-done-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke={accent}
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <p className="va-event-card-title" style={{ color: accent, textAlign: "center" }}>Details submitted</p>
       </div>
     );
   }
@@ -118,22 +133,25 @@ function VoiceGuestForm({ accent, onSubmit }) {
     <div className="va-event-card">
       <p className="va-event-card-title">Your Details</p>
       <div className="va-form-field">
-        <label>Full Name</label>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" />
+        <label htmlFor="va-name">Full Name</label>
+        <input id="va-name" value={name} onChange={e => setName(e.target.value)}
+          placeholder="Jane Smith" autoComplete="name" />
         {errs.name && <span className="va-form-err">{errs.name}</span>}
       </div>
       <div className="va-form-field">
-        <label>Email</label>
-        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" />
+        <label htmlFor="va-email">Email</label>
+        <input id="va-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="jane@example.com" autoComplete="email" />
         {errs.email && <span className="va-form-err">{errs.email}</span>}
       </div>
       <div className="va-form-field">
-        <label>Phone</label>
-        <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+94 77 123 4567" />
+        <label htmlFor="va-phone">Phone</label>
+        <input id="va-phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+          placeholder="+94 77 123 4567" autoComplete="tel" />
         {errs.phone && <span className="va-form-err">{errs.phone}</span>}
       </div>
       <button className="va-confirm-btn" style={{ background: accent }} onClick={handleSubmit}>
-        Continue →
+        Continue
       </button>
     </div>
   );
@@ -142,9 +160,18 @@ function VoiceGuestForm({ accent, onSubmit }) {
 function VoiceBookingDone({ data, accent }) {
   return (
     <div className="va-event-card">
-      <p className="va-event-card-title" style={{ color: accent }}>✓ Booking Confirmed</p>
+      <div className="va-booking-done-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke={accent}
+          strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+      <p className="va-event-card-title" style={{ color: accent, textAlign: "center" }}>Booking Confirmed</p>
       <div className="va-quote-rows">
-        <div className="va-quote-row"><span>Reference</span><span style={{ fontWeight: 700 }}>{data.reference}</span></div>
+        <div className="va-quote-row">
+          <span>Reference</span>
+          <span style={{ fontWeight: 700, color: accent }}>{data.reference}</span>
+        </div>
         <div className="va-quote-row"><span>Room</span><span>{data.room}</span></div>
         <div className="va-quote-row"><span>Check-in</span><span>{data.check_in}</span></div>
         <div className="va-quote-row"><span>Check-out</span><span>{data.check_out}</span></div>
@@ -159,20 +186,21 @@ export default function VoiceAgent({ slug, onClose }) {
   const [prop,       setProp]       = useState(null);
   const [status,     setStatus]     = useState("idle");
   const [messages,   setMessages]   = useState([]);
-  const [activeCard, setActiveCard] = useState(null); // {type, data}
+  const [activeCard, setActiveCard] = useState(null);
   const [error,      setError]      = useState("");
   const [audioLevel, setAudioLevel] = useState(0);
 
-  const wsRef          = useRef(null);
-  const audioCtxRef    = useRef(null);
-  const playCtxRef     = useRef(null);
-  const streamRef      = useRef(null);
-  const processorRef   = useRef(null);
-  const analyserRef    = useRef(null);
-  const nextStartRef   = useRef(0);
-  const animFrameRef   = useRef(null);
-  const transcriptRef  = useRef(null);
-  const pendingAsstRef = useRef("");
+  const wsRef           = useRef(null);
+  const audioCtxRef     = useRef(null);
+  const playCtxRef      = useRef(null);
+  const streamRef       = useRef(null);
+  const processorRef    = useRef(null);
+  const analyserRef     = useRef(null);
+  const nextStartRef    = useRef(0);
+  const animFrameRef    = useRef(null);
+  const transcriptRef   = useRef(null);
+  const pendingAsstRef  = useRef("");
+  const isRespondingRef = useRef(false); // true while OAI is streaming a response
 
   useEffect(() => {
     api.property(slug).then(setProp).catch(() => setError("Could not load property."));
@@ -180,11 +208,11 @@ export default function VoiceAgent({ slug, onClose }) {
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, activeCard]);
+  }, [messages]);
 
   useEffect(() => () => { _disconnect(); }, []);
 
-  // ── Audio helpers ─────────────────────────────────────────────────────────────
+  // ── Audio helpers ─────────────────────────────────────────────────────────
 
   function _enqueue(b64) {
     const ctx = playCtxRef.current;
@@ -221,6 +249,16 @@ export default function VoiceAgent({ slug, onClose }) {
     nextStartRef.current = 0;
   }
 
+  // Stop AI audio mid-playback (user speaks or card button pressed)
+  function _cancelPlayback() {
+    playCtxRef.current?.close().catch(() => {});
+    playCtxRef.current = null;
+    nextStartRef.current = 0;
+    // Recreate immediately so the next response has a fresh context
+    const pc = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    playCtxRef.current = pc;
+  }
+
   function _disconnect() {
     const ws = wsRef.current;
     wsRef.current = null;
@@ -229,11 +267,17 @@ export default function VoiceAgent({ slug, onClose }) {
     setStatus("idle");
   }
 
-  // ── Send text to OpenAI (card button interactions) ────────────────────────────
+  // ── Send text to OpenAI (card button interactions) ────────────────────────
 
   function sendText(text) {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    _cancelPlayback();
+    // Only cancel if OAI is actively streaming — avoids spurious cancel errors
+    if (isRespondingRef.current) {
+      ws.send(JSON.stringify({ type: "response.cancel" }));
+      isRespondingRef.current = false;
+    }
     setMessages(m => [...m, { role: "user", text }]);
     ws.send(JSON.stringify({
       type: "conversation.item.create",
@@ -246,7 +290,7 @@ export default function VoiceAgent({ slug, onClose }) {
     ws.send(JSON.stringify({ type: "response.create" }));
   }
 
-  // ── Event handler ─────────────────────────────────────────────────────────────
+  // ── Event handler ─────────────────────────────────────────────────────────
 
   function _handleEvent(raw) {
     let ev;
@@ -261,6 +305,9 @@ export default function VoiceAgent({ slug, onClose }) {
       case "input_audio_buffer.speech_started":
         pendingAsstRef.current = "";
         setStatus("listening");
+        // Clear our audio queue; server-side VAD cancels the OAI response automatically
+        _cancelPlayback();
+        isRespondingRef.current = false;
         break;
 
       case "input_audio_buffer.speech_stopped":
@@ -278,6 +325,7 @@ export default function VoiceAgent({ slug, onClose }) {
 
       case "response.output_audio.delta":
         if (ev.delta) {
+          isRespondingRef.current = true;
           setStatus("speaking");
           _enqueue(ev.delta);
         }
@@ -295,32 +343,36 @@ export default function VoiceAgent({ slug, onClose }) {
         break;
 
       case "response.done":
+        isRespondingRef.current = false;
         setStatus("ready");
         nextStartRef.current = 0;
         break;
 
-      // Backend-injected events from tool execution
       case "agent.event": {
         const aev = ev.event;
         if (!aev) break;
-        if (aev.type === "availability_results") setActiveCard({ type: "availability", data: aev.data });
-        else if (aev.type === "quote_result")    setActiveCard({ type: "quote",        data: aev.data });
+        if (aev.type === "availability_results")  setActiveCard({ type: "availability", data: aev.data });
+        else if (aev.type === "quote_result")     setActiveCard({ type: "quote",        data: aev.data });
         else if (aev.type === "guest_details_form") setActiveCard({ type: "guest_form", data: {} });
-        else if (aev.type === "booking_created") setActiveCard({ type: "booking_done", data: aev.data });
+        else if (aev.type === "booking_created")  setActiveCard({ type: "booking_done", data: aev.data });
         break;
       }
 
-      case "error":
-        setError(ev.error?.message || "Something went wrong.");
+      case "error": {
+        const msg = ev.error?.message || "";
+        // Suppress spurious cancel errors — they don't affect the session
+        if (msg.toLowerCase().includes("no active response")) break;
+        setError(msg || "Something went wrong.");
         setStatus("idle");
         break;
+      }
 
       default:
         break;
     }
   }
 
-  // ── Connect ───────────────────────────────────────────────────────────────────
+  // ── Connect ───────────────────────────────────────────────────────────────
 
   async function connect() {
     if (wsRef.current || !prop) return;
@@ -399,15 +451,17 @@ export default function VoiceAgent({ slug, onClose }) {
     };
   }
 
-  // ── Card interaction handlers ─────────────────────────────────────────────────
+  // ── Card interaction handlers ─────────────────────────────────────────────
 
   function handleSelectRoom(room, data) {
     setActiveCard(null);
+    // Ask for a quote — not a booking — so the AI calls get_quote and shows the price card first
     sendText(
-      `I'd like to book the ${room.name} (room type: ${room.room_type}) — ` +
-      `${data.check_in} to ${data.check_out}, ${data.adults} adult${data.adults !== 1 ? "s" : ""}` +
+      `Please get me the price quote for ${room.name} (room type: ${room.room_type}), ` +
+      `${data.check_in} to ${data.check_out}, ` +
+      `${data.adults} adult${data.adults !== 1 ? "s" : ""}` +
       `${data.children ? ` and ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}, ` +
-      `${data.meal_plan || "RO"}.`
+      `meal plan ${data.meal_plan || "RO"}.`
     );
   }
 
@@ -421,7 +475,7 @@ export default function VoiceAgent({ slug, onClose }) {
     sendText(`Name: ${name}\nEmail: ${email}\nPhone: ${phone}`);
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   const connected     = status !== "idle" && status !== "connecting";
   const accent        = prop?.accent || "#2f5d3a";
@@ -436,7 +490,7 @@ export default function VoiceAgent({ slug, onClose }) {
     idle:       "Tap mic to start",
     connecting: "Connecting...",
     ready:      "Listening for your voice...",
-    listening:  "I hear you...",
+    listening:  "Listening...",
     thinking:   "Thinking...",
     speaking:   "Speaking...",
   }[status] || " ";
@@ -447,84 +501,145 @@ export default function VoiceAgent({ slug, onClose }) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog" aria-modal="true" aria-label="Voice concierge"
     >
-      <div className="va-card" style={{ "--accent": accent }}>
+      <div className="va-modal">
 
-        <button className="va-close" onClick={onClose} aria-label="Close voice agent">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
+        {/* ── LEFT: voice panel ── */}
+        <div className="va-left">
+          <button className="va-close" onClick={onClose} aria-label="Close voice agent">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
 
-        <div className="va-orb-wrap" aria-hidden="true">
-          <VoiceOrb audioLevel={orbLevel} hue={status === "speaking" ? 40 : 0} />
+          <div className="va-orb-wrap" aria-hidden="true">
+            <VoiceOrb audioLevel={orbLevel} hue={status === "speaking" ? 40 : 0} />
+          </div>
+
+          <p className="va-name">{assistantName}</p>
+          <p className="va-hotel">{prop?.name || "\xa0"}</p>
+          <p className={`va-status${status !== "idle" ? " va-status-active" : ""}`}>
+            {statusLabel}
+          </p>
+
+          <div className="va-transcript" ref={transcriptRef} aria-live="polite">
+            {messages.length === 0 ? (
+              <p className="va-transcript-empty">Your conversation will appear here</p>
+            ) : (
+              messages.map((m, i) => (
+                <div key={i} className={`va-msg va-msg-${m.role}`}>
+                  <span className="va-msg-text">{m.text}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {error && <p className="va-error" role="alert">{error}</p>}
+
+          <div className="va-controls">
+            <button
+              className={`va-mic${connected ? " va-mic-recording" : ""}${status === "connecting" ? " va-mic-busy" : ""}`}
+              onClick={() => connected ? _disconnect() : connect()}
+              disabled={status === "connecting" || !prop}
+              aria-label={connected ? "End voice session" : "Start voice session"}
+            >
+              {status === "connecting" ? (
+                <span className="va-spinner" aria-hidden="true" />
+              ) : connected ? (
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="none" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="2" width="6" height="13" rx="3" />
+                  <path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6" />
+                </svg>
+              )}
+            </button>
+            <p className="va-hint" aria-live="polite">
+              {connected ? "Tap to end session" : "Tap to start voice session"}
+            </p>
+          </div>
         </div>
-        <p className="va-name">{assistantName}</p>
-        <p className="va-hotel">{prop?.name || "\xa0"}</p>
-        <p className={`va-status${status !== "idle" ? " va-status-active" : ""}`}>
-          {statusLabel}
-        </p>
 
-        {/* Transcript + inline cards */}
-        <div className="va-transcript" ref={transcriptRef} aria-live="polite">
-          {messages.length === 0 && !activeCard ? (
-            <p className="va-transcript-empty">Your conversation will appear here</p>
-          ) : (
-            messages.map((m, i) => (
-              <div key={i} className={`va-msg va-msg-${m.role}`}>
-                <span className="va-msg-text">{m.text}</span>
+        {/* ── RIGHT: card panel ── */}
+        <div className="va-right">
+          {!activeCard ? (
+            <div className="va-right-empty">
+              <p className="va-right-empty-title" style={{ color: accent }}>
+                {prop?.name || "AI Concierge"}
+              </p>
+              <p className="va-right-empty-sub">Ask me anything about your stay</p>
+              <div className="va-right-tips">
+                <div className="va-right-tip">
+                  <div className="va-right-tip-icon" style={{ background: accent }}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="va-right-tip-label">Check Availability</p>
+                    <p className="va-right-tip-desc">"Are rooms available from Dec 20 to Dec 25?"</p>
+                  </div>
+                </div>
+                <div className="va-right-tip">
+                  <div className="va-right-tip-icon" style={{ background: accent }}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="12" y1="1" x2="12" y2="23" />
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="va-right-tip-label">Get a Price Quote</p>
+                    <p className="va-right-tip-desc">"How much would the master bedroom cost?"</p>
+                  </div>
+                </div>
+                <div className="va-right-tip">
+                  <div className="va-right-tip-icon" style={{ background: accent }}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="va-right-tip-label">Book Instantly</p>
+                    <p className="va-right-tip-desc">"I'd like to book 2 nights for 2 adults."</p>
+                  </div>
+                </div>
               </div>
-            ))
-          )}
-
-          {activeCard?.type === "availability" && (
-            <VoiceAvailabilityCard
-              data={activeCard.data}
-              accent={accent}
-              onSelect={handleSelectRoom}
-            />
-          )}
-          {activeCard?.type === "quote" && (
-            <VoiceQuoteCard
-              data={activeCard.data}
-              accent={accent}
-              onConfirm={handleConfirmBooking}
-            />
-          )}
-          {activeCard?.type === "guest_form" && (
-            <VoiceGuestForm accent={accent} onSubmit={handleGuestSubmit} />
-          )}
-          {activeCard?.type === "booking_done" && (
-            <VoiceBookingDone data={activeCard.data} accent={accent} />
+            </div>
+          ) : (
+            <div className="va-card-panel">
+              {activeCard.type === "availability" && (
+                <VoiceAvailabilityCard
+                  data={activeCard.data}
+                  accent={accent}
+                  onSelect={handleSelectRoom}
+                />
+              )}
+              {activeCard.type === "quote" && (
+                <VoiceQuoteCard
+                  data={activeCard.data}
+                  accent={accent}
+                  onConfirm={handleConfirmBooking}
+                />
+              )}
+              {activeCard.type === "guest_form" && (
+                <VoiceGuestForm accent={accent} onSubmit={handleGuestSubmit} />
+              )}
+              {activeCard.type === "booking_done" && (
+                <VoiceBookingDone data={activeCard.data} accent={accent} />
+              )}
+            </div>
           )}
         </div>
-
-        {error && <p className="va-error" role="alert">{error}</p>}
-
-        <button
-          className={`va-mic${connected ? " va-mic-recording" : ""}${status === "connecting" ? " va-mic-busy" : ""}`}
-          onClick={() => connected ? _disconnect() : connect()}
-          disabled={status === "connecting" || !prop}
-          aria-label={connected ? "End voice session" : "Start voice session"}
-        >
-          {status === "connecting" ? (
-            <span className="va-spinner" aria-hidden="true" />
-          ) : connected ? (
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" stroke="none" aria-hidden="true">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="9" y="2" width="6" height="13" rx="3" />
-              <path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6" />
-            </svg>
-          )}
-        </button>
-
-        <p className="va-hint" aria-live="polite">
-          {connected ? "Tap to end session" : "Tap to start voice session"}
-        </p>
 
       </div>
     </div>

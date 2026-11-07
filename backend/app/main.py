@@ -988,7 +988,15 @@ async def voice_realtime_ws(websocket: WebSocket, slug: str, db: Session = Depen
 
     temp_conv = Conversation(id=str(uuid4()), property_id=prop.id)
     agent = ConciergeAgent(db, prop, temp_conv)
-    instructions = agent.system_prompt("en")
+    instructions = agent.system_prompt("en") + """
+
+VOICE SESSION RULES — you are speaking aloud, not texting. These override the text-chat rules above:
+1. Keep EVERY reply under 2 sentences. No bullet points, no lists, no markdown.
+2. After showing availability say: "You can tap Select on a room, or just tell me which one you'd like."
+3. After the guest selects a room say: "Great! You can fill in the form on screen, or just tell me your name, email and phone number."
+4. When the guest says their name, email and phone aloud, read all three back and ask "Is that correct?" — wait for a clear yes before calling create_reservation.
+5. Never say "fill in your details below" — always say "fill in the form on screen, or tell me your details."
+"""
 
     oai_url = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
     oai_headers = [("Authorization", f"Bearer {settings.openai_api_key}")]
@@ -1025,11 +1033,25 @@ async def voice_realtime_ws(websocket: WebSocket, slug: str, db: Session = Depen
                         result = agent._get_quote(**args)
                     elif name == "create_reservation":
                         result = agent._create_reservation(**{**args, "guest_confirmed": args.get("guest_confirmed", True)})
+                        # Send booking-received email to guest + staff alert (same as HTTP chat endpoint)
+                        if result.get("reference"):
+                            try:
+                                b = db.scalar(select(Booking).where(
+                                    Booking.property_id == prop.id,
+                                    Booking.reference == result["reference"],
+                                ))
+                                if b:
+                                    bd, pd = _booking_email_data(b), _prop_email_data(prop)
+                                    em.booking_received(bd, pd)
+                                    em.staff_new_booking(bd, pd)
+                            except Exception as mail_exc:
+                                print(f"[VOICE] email error: {mail_exc}")
                     elif name == "request_guest_details":
                         result = agent._request_guest_details()
                     else:
                         result = {"error": f"Unknown tool: {name}"}
                 except Exception as exc:
+                    print(f"[VOICE] tool '{name}' error: {exc}")
                     result = {"error": str(exc)}
 
                 # Forward any events the agent emitted to the browser
