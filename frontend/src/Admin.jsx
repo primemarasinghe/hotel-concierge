@@ -436,12 +436,15 @@ function Overview({ a, slug, goTo }) {
 }
 
 // ── Pending booking action card ───────────────────────────────────────────────
-function BookingActionCard({ b, onConfirm, onCancel }) {
+function BookingActionCard({ b, onConfirm, onCancel, onResend }) {
   const [loading, setLoading] = useState(null);
   async function handle(action) {
     setLoading(action);
-    try { await (action === "confirm" ? onConfirm() : onCancel()); }
-    finally { setLoading(null); }
+    try {
+      if (action === "confirm") await onConfirm();
+      else if (action === "cancel") await onCancel();
+      else if (action === "resend") await onResend();
+    } finally { setLoading(null); }
   }
   return (
     <div className="bac">
@@ -483,6 +486,16 @@ function BookingActionCard({ b, onConfirm, onCancel }) {
         >
           {loading === "cancel" ? "Cancelling…" : "Cancel"}
         </button>
+        {onResend && (
+          <button
+            className="adm-btn adm-btn-ghost-sm"
+            onClick={() => handle("resend")}
+            disabled={!!loading}
+            title="Resend confirmation email to guest"
+          >
+            {loading === "resend" ? "Sending…" : "✉ Resend"}
+          </button>
+        )}
         <button
           className="adm-btn adm-btn-confirm"
           onClick={() => handle("confirm")}
@@ -580,6 +593,15 @@ function Bookings({ a, slug, toast, onRefresh }) {
     }
   }
 
+  async function resend(ref) {
+    try {
+      const r = await a.resendConfirmation(slug, ref);
+      toast.success(`Confirmation email resent to ${r.sent_to}`);
+    } catch (e) {
+      toast.error(e.message || "Failed to resend email");
+    }
+  }
+
   const pending = useMemo(() => (rows || []).filter(b => b.status === "pending"), [rows]);
   const filtered = useMemo(() => {
     if (!rows) return [];
@@ -610,6 +632,7 @@ function Bookings({ a, slug, toast, onRefresh }) {
                 b={b}
                 onConfirm={() => setStatus(b.reference, "confirmed")}
                 onCancel={()  => setStatus(b.reference, "cancelled")}
+                onResend={()  => resend(b.reference)}
               />
             ))}
           </div>
@@ -736,6 +759,12 @@ function Bookings({ a, slug, toast, onRefresh }) {
                     )}
                   </td>
                   <td className="actions">
+                    {b.status !== "cancelled" && (
+                      <button className="adm-icon-btn" onClick={() => resend(b.reference)}
+                        title="Resend confirmation email" aria-label="Resend confirmation email">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                      </button>
+                    )}
                     {b.status === "pending" && (
                       <button className="adm-icon-btn adm-icon-btn-confirm" onClick={() => setStatus(b.reference, "confirmed")} title="Confirm booking" aria-label="Confirm booking">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
@@ -2251,6 +2280,176 @@ function Rooms({ a, slug, toast, currency }) {
 }
 
 // ── Admin shell ───────────────────────────────────────────────────────────────
+// ── Notifications / Email ─────────────────────────────────────────────────────
+
+const EMAIL_FLOWS = [
+  { icon: "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zM22 6l-10 7L2 6", label: "Booking received",    desc: "Guest gets an email the moment they book through the AI chat." },
+  { icon: "M20 6L9 17l-5-5",                                                                                label: "Booking confirmed",   desc: "Guest gets a confirmation email when you confirm in the Bookings tab." },
+  { icon: "M18 6L6 18M6 6l12 12",                                                                           label: "Booking cancelled",   desc: "Guest gets a cancellation notice when you cancel a booking." },
+  { icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.5 5v5.25l4.5 2.67-.75 1.23L11 13V7h1.5z", label: "Pre-arrival (48h)", desc: "Reminder sent automatically 48 h before check-in. Runs every hour." },
+  { icon: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",  label: "Review request",      desc: "Sent after check-out (within 30 days). Runs automatically every hour." },
+];
+
+function Notifications({ a, slug, toast }) {
+  const [data, setData]  = useState(null);
+  const [busy, setBusy]  = useState("");
+
+  const load = () => a.notifications(slug).then(setData).catch(() => {});
+  useEffect(() => { load(); }, [slug]);
+
+  async function sendPreArrival() {
+    setBusy("pre");
+    try { const r = await a.sendPreArrival(slug); toast.success(`Sent ${r.sent} pre-arrival email${r.sent !== 1 ? "s" : ""}`); load(); }
+    catch (e) { toast.error(e.message || "Error"); }
+    finally { setBusy(""); }
+  }
+  async function sendReviews() {
+    setBusy("rev");
+    try { const r = await a.sendReviews(slug); toast.success(`Sent ${r.sent} review request${r.sent !== 1 ? "s" : ""}`); load(); }
+    catch (e) { toast.error(e.message || "Error"); }
+    finally { setBusy(""); }
+  }
+  async function testEmail() {
+    setBusy("test");
+    try { const r = await a.testEmail(slug); toast.success(`Test email sent to ${r.sent_to}`); }
+    catch (e) { toast.error(e.message || "SMTP error"); }
+    finally { setBusy(""); }
+  }
+
+  if (!data) return <div className="adm-loading">Loading…</div>;
+
+  const { smtp_configured, pre_arrival_pending, reviews_pending, stats } = data;
+  const totalSent = stats.pre_arrival_sent_30d + stats.reviews_sent_30d;
+
+  return (
+    <div className="notif-wrap">
+
+      {/* SMTP status banner */}
+      <div className={`notif-banner ${smtp_configured ? "notif-banner-ok" : "notif-banner-warn"}`}>
+        <div className="notif-banner-left">
+          <div className={`notif-dot ${smtp_configured ? "notif-dot-ok" : "notif-dot-warn"}`} />
+          <div>
+            <strong>{smtp_configured ? "Email notifications active" : "Email not configured"}</strong>
+            <p>{smtp_configured
+              ? "Booking confirmations, pre-arrival messages and review requests are sent automatically."
+              : "Add SMTP_HOST, SMTP_USER, SMTP_PASS and STAFF_EMAIL to your .env file to enable emails."
+            }</p>
+          </div>
+        </div>
+        {smtp_configured && (
+          <button className="adm-btn" onClick={testEmail} disabled={!!busy}>
+            {busy === "test" ? "Sending…" : "Send Test Email"}
+          </button>
+        )}
+      </div>
+
+      {/* Stats row */}
+      <div className="notif-stats">
+        {[
+          { n: pre_arrival_pending.length, l: "Pre-arrival pending",  warn: pre_arrival_pending.length > 0 },
+          { n: reviews_pending.length,     l: "Review requests pending", warn: reviews_pending.length > 0 },
+          { n: totalSent,                  l: "Emails sent (30 days)", warn: false },
+          { n: stats.pre_arrival_sent_30d, l: "Pre-arrival sent",       warn: false },
+          { n: stats.reviews_sent_30d,     l: "Review requests sent",   warn: false },
+        ].map(s => (
+          <div className="notif-stat" key={s.l}>
+            <strong style={s.warn && s.n > 0 ? { color: "#d97706" } : {}}>{s.n}</strong>
+            <span>{s.l}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* How it works */}
+      <div className="adm-section-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h2 className="adm-section-title">Email flows</h2>
+          <p className="adm-section-sub">Every trigger below fires automatically. The queues below let you send manually or catch any misses.</p>
+        </div>
+      </div>
+      <div className="notif-flows">
+        {EMAIL_FLOWS.map(f => (
+          <div className="notif-flow-item" key={f.label}>
+            <div className="notif-flow-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d={f.icon} />
+              </svg>
+            </div>
+            <div className="notif-flow-info">
+              <strong>{f.label}</strong>
+              <p>{f.desc}</p>
+            </div>
+            <span className="notif-auto-badge">Auto</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Pre-arrival queue */}
+      <div className="notif-section">
+        <div className="notif-section-head">
+          <div>
+            <h3>Pre-arrival queue</h3>
+            <p>Confirmed guests checking in within 48 hours who haven't been contacted yet.</p>
+          </div>
+          {pre_arrival_pending.length > 0 && smtp_configured && (
+            <button className="adm-btn adm-btn-primary" onClick={sendPreArrival} disabled={!!busy}>
+              {busy === "pre" ? "Sending…" : `Send All (${pre_arrival_pending.length})`}
+            </button>
+          )}
+        </div>
+        {pre_arrival_pending.length === 0 ? (
+          <div className="adm-empty">All clear — no pending pre-arrival emails.</div>
+        ) : (
+          <div className="notif-queue">
+            {pre_arrival_pending.map(b => (
+              <div className="notif-queue-row" key={b.reference}>
+                <span className="notif-q-ref">{b.reference}</span>
+                <div className="notif-q-guest">
+                  <strong>{b.guest_name}</strong>
+                  <span>{b.email}</span>
+                </div>
+                <span className="notif-q-date">Check-in {fmtDate(b.check_in)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Review requests queue */}
+      <div className="notif-section">
+        <div className="notif-section-head">
+          <div>
+            <h3>Review requests queue</h3>
+            <p>Guests who checked out in the last 30 days and haven't received a review request.</p>
+          </div>
+          {reviews_pending.length > 0 && smtp_configured && (
+            <button className="adm-btn adm-btn-primary" onClick={sendReviews} disabled={!!busy}>
+              {busy === "rev" ? "Sending…" : `Send All (${reviews_pending.length})`}
+            </button>
+          )}
+        </div>
+        {reviews_pending.length === 0 ? (
+          <div className="adm-empty">All clear — no pending review requests.</div>
+        ) : (
+          <div className="notif-queue">
+            {reviews_pending.map(b => (
+              <div className="notif-queue-row" key={b.reference}>
+                <span className="notif-q-ref">{b.reference}</span>
+                <div className="notif-q-guest">
+                  <strong>{b.guest_name}</strong>
+                  <span>{b.email}</span>
+                </div>
+                <span className="notif-q-date">Checked out {fmtDate(b.check_out)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
 // ── Seasonal Rates ───────────────────────────────────────────────────────────
 
 const MULT_PRESETS = [
@@ -2303,15 +2502,15 @@ function Seasons({ a, slug, toast }) {
       const body = { ...form, multiplier: parseFloat(form.multiplier) || 1, min_nights: parseInt(form.min_nights) || 1 };
       if (editId) {
         await a.updateSeason(slug, editId, body);
-        toast("Season updated");
+        toast.success("Season updated");
       } else {
         await a.createSeason(slug, body);
-        toast("Season added");
+        toast.success("Season added");
       }
       cancelForm();
       load();
     } catch (err) {
-      toast(err.message || "Save failed", true);
+      toast.error(err.message || "Save failed");
     } finally {
       setBusy(false);
     }
@@ -2321,9 +2520,9 @@ function Seasons({ a, slug, toast }) {
     if (!confirm("Delete this season?")) return;
     try {
       await a.deleteSeason(slug, id);
-      toast("Season deleted");
+      toast.success("Season deleted");
       load();
-    } catch (err) { toast(err.message || "Error", true); }
+    } catch (err) { toast.error(err.message || "Error"); }
   }
 
   function SeasonForm({ isEdit = false }) {
@@ -2460,6 +2659,7 @@ const TABS = [
   ["kb",            "Knowledge Base","M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"],
   ["rooms",         "Rooms",         "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"],
   ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
+  ["notifications", "Notifications", "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"],
   ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
 ];
 
@@ -2701,6 +2901,7 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "kb"            && <KnowledgeBase   a={a} slug={slug} toast={toast}/>}
           {slug && tab === "rooms"         && <Rooms           a={a} slug={slug} toast={toast} currency={currency}/>}
           {slug && tab === "seasons"       && <Seasons         a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "notifications" && <Notifications   a={a} slug={slug} toast={toast}/>}
           {slug && tab === "customize"     && <Customize       a={a} slug={slug} toast={toast}/>}
         </main>
       </div>

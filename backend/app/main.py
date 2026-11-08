@@ -1150,6 +1150,98 @@ def admin_send_reviews(prop: Property = Depends(get_property), db: Session = Dep
     return {"sent": len(rows)}
 
 
+# ── Notifications dashboard ───────────────────────────────────────────────────
+
+@app.get("/api/admin/{slug}/notifications", dependencies=[admin])
+def admin_notifications(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    today      = svc.today_at(prop)
+    window_end = today + timedelta(days=2)
+    cutoff_30  = today - timedelta(days=30)
+
+    pre_rows = db.scalars(select(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_in > today,
+        Booking.check_in <= window_end,
+        Booking.pre_arrival_email_sent.is_(False),
+    ).order_by(Booking.check_in)).all()
+
+    rev_rows = db.scalars(select(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.status == "confirmed",
+        Booking.check_out < today,
+        Booking.check_out >= cutoff_30,
+        Booking.review_email_sent.is_(False),
+    ).order_by(Booking.check_out.desc())).all()
+
+    pre_sent = db.scalar(select(func.count()).select_from(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.pre_arrival_email_sent.is_(True),
+        Booking.check_in >= cutoff_30,
+    )) or 0
+    rev_sent = db.scalar(select(func.count()).select_from(Booking).where(
+        Booking.property_id == prop.id,
+        Booking.review_email_sent.is_(True),
+        Booking.check_out >= cutoff_30,
+    )) or 0
+
+    def _mini(b):
+        return {
+            "reference": b.reference, "guest_name": b.guest_name, "email": b.email,
+            "check_in": b.check_in.isoformat(), "check_out": b.check_out.isoformat(),
+        }
+
+    smtp_ok = bool(settings.smtp_host and settings.smtp_user and settings.smtp_pass and settings.email_enabled)
+    return {
+        "smtp_configured": smtp_ok,
+        "pre_arrival_pending": [_mini(b) for b in pre_rows],
+        "reviews_pending":     [_mini(b) for b in rev_rows],
+        "stats": {"pre_arrival_sent_30d": pre_sent, "reviews_sent_30d": rev_sent},
+    }
+
+
+@app.post("/api/admin/{slug}/notifications/test", dependencies=[admin])
+def admin_test_email(prop: Property = Depends(get_property)):
+    if not settings.smtp_host or not settings.smtp_user or not settings.smtp_pass:
+        raise HTTPException(400, "SMTP not configured — add SMTP_HOST, SMTP_USER and SMTP_PASS to .env")
+    target = settings.staff_email or settings.smtp_user
+    pd = _prop_email_data(prop)
+    try:
+        em._send(
+            target,
+            f"[Test] SMTP working — {prop.name}",
+            em._template(pd,
+                title="SMTP test successful ✓",
+                subtitle=f"Email notifications are correctly configured for {prop.name}.",
+                rows=[
+                    ("From",      settings.email_from or settings.smtp_user),
+                    ("Host",      f"{settings.smtp_host}:{settings.smtp_port}"),
+                    ("Recipient", target),
+                ],
+                note="This is a test email sent from the admin panel. No action required.",
+            ),
+            from_name=prop.name,
+        )
+        return {"sent_to": target}
+    except Exception as exc:
+        raise HTTPException(500, f"SMTP error: {exc}")
+
+
+@app.post("/api/admin/{slug}/bookings/{reference}/resend", dependencies=[admin])
+def admin_resend_confirmation(reference: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    b = db.scalar(select(Booking).where(Booking.property_id == prop.id, Booking.reference == reference))
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    bd = _booking_email_data(b)
+    pd = _prop_email_data(prop)
+    fn = em.booking_confirmed if b.status == "confirmed" else em.booking_received
+    try:
+        fn(bd, pd)
+        return {"sent_to": b.email}
+    except Exception as exc:
+        raise HTTPException(500, f"Email error: {exc}")
+
+
 @app.post("/api/admin/{slug}/set-credentials", dependencies=[admin])
 def admin_set_credentials(slug: str, body: SetCredentialsBody, db: Session = Depends(get_db)):
     prop = db.scalar(select(Property).where(Property.slug == slug))
