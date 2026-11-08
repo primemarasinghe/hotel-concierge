@@ -104,6 +104,10 @@ export const api = {
     createRoom: (slug, body) => request(`/api/admin/${slug}/rooms`, { method: "POST", body, token, isJwt }),
     updateRoom: (slug, id, body) => request(`/api/admin/${slug}/rooms/${id}`, { method: "PATCH", body, token, isJwt }),
     deleteRoom: (slug, id) => request(`/api/admin/${slug}/rooms/${id}`, { method: "DELETE", token, isJwt }),
+    seasons: (slug) => request(`/api/admin/${slug}/seasons`, { token, isJwt }),
+    createSeason: (slug, body) => request(`/api/admin/${slug}/seasons`, { method: "POST", body, token, isJwt }),
+    updateSeason: (slug, id, body) => request(`/api/admin/${slug}/seasons/${id}`, { method: "PATCH", body, token, isJwt }),
+    deleteSeason: (slug, id) => request(`/api/admin/${slug}/seasons/${id}`, { method: "DELETE", token, isJwt }),
   }),
 };
 

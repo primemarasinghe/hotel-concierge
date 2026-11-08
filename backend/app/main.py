@@ -21,7 +21,7 @@ from .agent import ConciergeAgent
 from .config import settings
 from .db import SessionLocal, get_db, init_db
 from .models import (Booking, Conversation, KnowledgeChunk, Message, PromoCode, Property,
-                     RoomType, ServiceRequest, TransferRequest)
+                     RoomType, SeasonalRate, ServiceRequest, TransferRequest)
 from .ratelimit import ip_limiter, lookup_limiter, session_limiter
 
 async def _cleanup_limiters():
@@ -779,6 +779,14 @@ def _room_out(r: RoomType) -> dict:
     }
 
 
+class SeasonIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    start_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    multiplier: float = Field(1.0, gt=0, le=10)
+    min_nights: int = Field(1, ge=1)
+
+
 class RoomTypeIn(BaseModel):
     code: str = Field(..., min_length=1, max_length=32)
     name: str = Field(..., min_length=1, max_length=120)
@@ -845,6 +853,76 @@ def admin_delete_room(room_id: int, prop: Property = Depends(get_property), db: 
     if has_bookings:
         raise HTTPException(409, f"Cannot delete — {has_bookings} booking(s) reference this room type")
     db.delete(r)
+    db.commit()
+    return {"ok": True}
+
+
+# ── Seasonal rates ──────────────────────────────────────────────────────────
+
+def _season_out(s: SeasonalRate) -> dict:
+    return {
+        "id": s.id,
+        "name": s.name,
+        "start_date": s.start_date.isoformat(),
+        "end_date": s.end_date.isoformat(),
+        "multiplier": s.multiplier,
+        "min_nights": s.min_nights,
+    }
+
+
+@app.get("/api/admin/{slug}/seasons", dependencies=[admin])
+def admin_seasons(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    seasons = db.scalars(
+        select(SeasonalRate).where(SeasonalRate.property_id == prop.id)
+        .order_by(SeasonalRate.start_date)
+    ).all()
+    return [_season_out(s) for s in seasons]
+
+
+@app.post("/api/admin/{slug}/seasons", dependencies=[admin])
+def admin_create_season(body: SeasonIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    from datetime import date as _date
+    start = _date.fromisoformat(body.start_date)
+    end   = _date.fromisoformat(body.end_date)
+    if end < start:
+        raise HTTPException(422, "end_date must be on or after start_date")
+    s = SeasonalRate(property_id=prop.id, name=body.name, start_date=start,
+                     end_date=end, multiplier=body.multiplier, min_nights=body.min_nights)
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return _season_out(s)
+
+
+@app.patch("/api/admin/{slug}/seasons/{season_id}", dependencies=[admin])
+def admin_update_season(season_id: int, body: SeasonIn,
+                        prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    from datetime import date as _date
+    s = db.scalar(select(SeasonalRate).where(SeasonalRate.id == season_id,
+                                              SeasonalRate.property_id == prop.id))
+    if not s:
+        raise HTTPException(404, "Season not found")
+    start = _date.fromisoformat(body.start_date)
+    end   = _date.fromisoformat(body.end_date)
+    if end < start:
+        raise HTTPException(422, "end_date must be on or after start_date")
+    s.name = body.name
+    s.start_date = start
+    s.end_date = end
+    s.multiplier = body.multiplier
+    s.min_nights = body.min_nights
+    db.commit()
+    db.refresh(s)
+    return _season_out(s)
+
+
+@app.delete("/api/admin/{slug}/seasons/{season_id}", dependencies=[admin])
+def admin_delete_season(season_id: int, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    s = db.scalar(select(SeasonalRate).where(SeasonalRate.id == season_id,
+                                              SeasonalRate.property_id == prop.id))
+    if not s:
+        raise HTTPException(404, "Season not found")
+    db.delete(s)
     db.commit()
     return {"ok": True}
 

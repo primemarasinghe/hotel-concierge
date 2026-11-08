@@ -4531,3 +4531,123 @@ details[open].avail-unavail summary::before { content: "− "; }
   .hp-cta-actions { flex-direction: column; align-items: stretch; }
   .hp-cta-btn, .hp-cta-btn-ghost { justify-content: center; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SEASONAL RATES  (Admin.jsx → Seasons component)
+   ═══════════════════════════════════════════════════════════════ */
+
+.sn-wrap { display: flex; flex-direction: column; gap: 20px; }
+
+/* form */
+.sn-form {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sn-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.sn-field-full { grid-column: 1 / -1; }
+
+/* multiplier presets */
+.sn-mult-hint {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.sn-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.sn-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 56px;
+}
+.sn-preset:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--paper)); }
+.sn-preset-active { border-color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 10%, var(--paper)) !important; }
+.sn-preset-val { font: 700 0.95rem/1 var(--ui); color: var(--ink); }
+.sn-preset-hint { font: 400 0.72rem/1 var(--ui); color: var(--muted); }
+.sn-preset-custom { width: 80px; flex: none; text-align: center; }
+
+.sn-form-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+/* season list */
+.sn-list { display: flex; flex-direction: column; gap: 10px; }
+
+.sn-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+  transition: box-shadow 0.2s;
+}
+.sn-card:hover { box-shadow: 0 4px 16px rgba(24,33,29,0.08); }
+
+.sn-card-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  flex-wrap: wrap;
+}
+.sn-card-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sn-mult-badge {
+  min-width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font: 700 1.1rem/1 var(--ui);
+  flex: none;
+}
+.sn-card-info { display: flex; flex-direction: column; gap: 4px; }
+.sn-name { margin: 0; font: 600 1rem/1.2 var(--ui); color: var(--ink); }
+.sn-dates { margin: 0; font: 400 0.84rem/1 var(--ui); color: var(--muted); }
+
+.sn-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sn-meta-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 600 0.78rem/1 var(--ui);
+  background: var(--paper);
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .sn-form-grid { grid-template-columns: 1fr; }
+  .sn-field-full { grid-column: auto; }
+  .sn-card-inner { flex-direction: column; align-items: flex-start; }
+  .sn-card-right { width: 100%; }
+}

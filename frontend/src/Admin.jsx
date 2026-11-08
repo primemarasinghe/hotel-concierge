@@ -2251,6 +2251,204 @@ function Rooms({ a, slug, toast, currency }) {
 }
 
 // ── Admin shell ───────────────────────────────────────────────────────────────
+// ── Seasonal Rates ───────────────────────────────────────────────────────────
+
+const MULT_PRESETS = [
+  { label: "0.7×", value: 0.7,  hint: "Low" },
+  { label: "0.8×", value: 0.8,  hint: "Shoulder" },
+  { label: "1.0×", value: 1.0,  hint: "Standard" },
+  { label: "1.2×", value: 1.2,  hint: "Peak" },
+  { label: "1.5×", value: 1.5,  hint: "High" },
+  { label: "2.0×", value: 2.0,  hint: "Premium" },
+];
+const SN_EMPTY = { name: "", start_date: "", end_date: "", multiplier: 1.0, min_nights: 1 };
+
+function multColor(m) {
+  if (m < 1) return "#059669";
+  if (m === 1) return "var(--muted)";
+  if (m < 1.4) return "#d97706";
+  return "#dc2626";
+}
+function multLabel(m) {
+  const n = parseFloat(m) || 1;
+  if (n < 1) return `-${Math.round((1 - n) * 100)}%`;
+  if (n === 1) return "Standard";
+  return `+${Math.round((n - 1) * 100)}%`;
+}
+
+function Seasons({ a, slug, toast }) {
+  const [list,    setList]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding,  setAdding]  = useState(false);
+  const [editId,  setEditId]  = useState(null);
+  const [form,    setForm]    = useState(SN_EMPTY);
+  const [busy,    setBusy]    = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    a.seasons(slug)
+      .then(d => { setList(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [slug]);
+
+  function startAdd()  { setAdding(true); setEditId(null); setForm(SN_EMPTY); }
+  function startEdit(s){ setEditId(s.id); setAdding(false); setForm({ name: s.name, start_date: s.start_date, end_date: s.end_date, multiplier: s.multiplier, min_nights: s.min_nights }); }
+  function cancelForm(){ setAdding(false); setEditId(null); setForm(SN_EMPTY); }
+
+  async function save() {
+    if (!form.name.trim() || !form.start_date || !form.end_date) return;
+    setBusy(true);
+    try {
+      const body = { ...form, multiplier: parseFloat(form.multiplier) || 1, min_nights: parseInt(form.min_nights) || 1 };
+      if (editId) {
+        await a.updateSeason(slug, editId, body);
+        toast("Season updated");
+      } else {
+        await a.createSeason(slug, body);
+        toast("Season added");
+      }
+      cancelForm();
+      load();
+    } catch (err) {
+      toast(err.message || "Save failed", true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function del(id) {
+    if (!confirm("Delete this season?")) return;
+    try {
+      await a.deleteSeason(slug, id);
+      toast("Season deleted");
+      load();
+    } catch (err) { toast(err.message || "Error", true); }
+  }
+
+  function SeasonForm({ isEdit = false }) {
+    const mult = parseFloat(form.multiplier) || 1;
+    return (
+      <div className="sn-form">
+        <div className="sn-form-grid">
+          <div className="adm-field sn-field-full">
+            <label className="adm-label">Season Name</label>
+            <input className="adm-input" placeholder="e.g. Christmas & New Year, High Season, Shoulder…"
+              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Start Date</label>
+            <input className="adm-input" type="date" value={form.start_date}
+              onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">End Date</label>
+            <input className="adm-input" type="date" value={form.end_date}
+              onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+          </div>
+          <div className="adm-field sn-field-full">
+            <label className="adm-label">
+              Rate Multiplier
+              <span className="sn-mult-hint"> — {mult}× base rate &nbsp;
+                <span style={{ color: multColor(mult), fontWeight: 600 }}>{multLabel(mult)}</span>
+              </span>
+            </label>
+            <div className="sn-presets">
+              {MULT_PRESETS.map(p => (
+                <button key={p.value} type="button"
+                  className={`sn-preset${parseFloat(form.multiplier) === p.value ? " sn-preset-active" : ""}`}
+                  onClick={() => setForm(f => ({ ...f, multiplier: p.value }))}>
+                  <span className="sn-preset-val">{p.label}</span>
+                  <span className="sn-preset-hint">{p.hint}</span>
+                </button>
+              ))}
+              <input className="adm-input sn-preset-custom" type="number" step="0.05" min="0.1" max="10"
+                value={form.multiplier}
+                onChange={e => setForm(f => ({ ...f, multiplier: e.target.value }))}
+                title="Custom multiplier" />
+            </div>
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Min Nights</label>
+            <input className="adm-input" type="number" min="1" max="90" value={form.min_nights}
+              onChange={e => setForm(f => ({ ...f, min_nights: e.target.value }))} />
+          </div>
+        </div>
+        <div className="sn-form-actions">
+          <button className="adm-btn adm-btn-primary" onClick={save}
+            disabled={busy || !form.name.trim() || !form.start_date || !form.end_date}>
+            {busy ? "Saving…" : isEdit ? "Update Season" : "Add Season"}
+          </button>
+          <button className="adm-btn" onClick={cancelForm}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  const formOpen = adding || editId !== null;
+
+  return (
+    <div className="sn-wrap">
+      <div className="adm-section-head">
+        <div>
+          <h2 className="adm-section-title">Seasonal Rates</h2>
+          <p className="adm-section-sub">Date ranges that multiply the base room rate. Overlapping seasons use the higher multiplier.</p>
+        </div>
+        {!formOpen && (
+          <button className="adm-btn adm-btn-primary" onClick={startAdd}>+ Add Season</button>
+        )}
+      </div>
+
+      {adding && <SeasonForm />}
+
+      {loading ? (
+        <div className="adm-loading">Loading…</div>
+      ) : list.length === 0 && !adding ? (
+        <div className="adm-empty">
+          No seasonal rates yet. Add one to override the base rate for specific date ranges.
+        </div>
+      ) : (
+        <div className="sn-list">
+          {list.map(s => {
+            const color = multColor(s.multiplier);
+            return (
+              <div key={s.id} className="sn-card">
+                {editId === s.id ? (
+                  <SeasonForm isEdit />
+                ) : (
+                  <div className="sn-card-inner">
+                    <div className="sn-card-left">
+                      <div className="sn-mult-badge" style={{ background: `${color}1a`, color }}>
+                        {s.multiplier}×
+                      </div>
+                      <div className="sn-card-info">
+                        <p className="sn-name">{s.name}</p>
+                        <p className="sn-dates">
+                          {fmtDate(s.start_date)} – {fmtDate(s.end_date)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="sn-card-right">
+                      <span className="sn-meta-pill" style={{ color, background: `${color}12` }}>
+                        {multLabel(s.multiplier)}
+                      </span>
+                      {s.min_nights > 1 && (
+                        <span className="sn-meta-pill">Min {s.min_nights} nights</span>
+                      )}
+                      <button className="adm-btn-sm" onClick={() => startEdit(s)}>Edit</button>
+                      <button className="adm-btn-sm adm-btn-danger" onClick={() => del(s.id)}>Delete</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
   ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
@@ -2261,6 +2459,7 @@ const TABS = [
   ["calendar",      "Calendar",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
   ["kb",            "Knowledge Base","M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"],
   ["rooms",         "Rooms",         "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"],
+  ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
   ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
 ];
 
@@ -2501,6 +2700,7 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "calendar"      && <CalendarView    a={a} slug={slug}/>}
           {slug && tab === "kb"            && <KnowledgeBase   a={a} slug={slug} toast={toast}/>}
           {slug && tab === "rooms"         && <Rooms           a={a} slug={slug} toast={toast} currency={currency}/>}
+          {slug && tab === "seasons"       && <Seasons         a={a} slug={slug} toast={toast}/>}
           {slug && tab === "customize"     && <Customize       a={a} slug={slug} toast={toast}/>}
         </main>
       </div>
