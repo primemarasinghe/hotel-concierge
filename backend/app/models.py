@@ -33,6 +33,10 @@ class Property(Base):
     reference_prefix: Mapped[str] = mapped_column(String(6), default="BK")
     free_cancellation_days: Mapped[int] = mapped_column(Integer, default=7)
     max_stay_nights: Mapped[int] = mapped_column(Integer, default=30)
+    greeting: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    suggestions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    admin_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    admin_password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     room_types: Mapped[list["RoomType"]] = relationship(back_populates="property")
 

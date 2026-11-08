@@ -1,8 +1,11 @@
 const BASE = import.meta.env.VITE_API_BASE || "";
 
-async function request(path, { method = "GET", body, token } = {}) {
+async function request(path, { method = "GET", body, token, isJwt = false } = {}) {
   const headers = { "Content-Type": "application/json" };
-  if (token) headers["X-Admin-Token"] = token;
+  if (token) {
+    if (isJwt) headers["Authorization"] = `Bearer ${token}`;
+    else headers["X-Admin-Token"] = token;
+  }
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
@@ -30,32 +33,77 @@ export const api = {
     request("/api/booking/lookup", { method: "POST", body: { reference, email } }),
   cancelBooking: (reference, email) =>
     request(`/api/booking/${reference}/cancel`, { method: "POST", body: { email } }),
-  admin: (token) => ({
-    summary: (slug) => request(`/api/admin/${slug}/summary`, { token }),
+  superAdmin: (adminToken) => ({
+    listProperties: () => request("/api/super/properties", { token: adminToken }),
+    createProperty: (body) => request("/api/super/properties", { method: "POST", body, token: adminToken }),
+    setCredentials: (slug, email, password) =>
+      request(`/api/admin/${slug}/set-credentials`, { method: "POST", body: { email, password }, token: adminToken }),
+  }),
+  auth: {
+    login: (slug, email, password) =>
+      request(`/api/auth/${slug}/login`, { method: "POST", body: { email, password } }),
+    setCredentials: (slug, email, password, adminToken) =>
+      request(`/api/admin/${slug}/set-credentials`, {
+        method: "POST", body: { email, password }, token: adminToken,
+      }),
+  },
+  admin: (token, isJwt = false) => ({
+    summary: (slug) => request(`/api/admin/${slug}/summary`, { token, isJwt }),
     bookings: (slug, status) =>
-      request(`/api/admin/${slug}/bookings${status ? `?status=${status}` : ""}`, { token }),
+      request(`/api/admin/${slug}/bookings${status ? `?status=${status}` : ""}`, { token, isJwt }),
     setBooking: (slug, ref, status) =>
-      request(`/api/admin/${slug}/bookings/${ref}`, { method: "PATCH", body: { status }, token }),
-    transfers: (slug) => request(`/api/admin/${slug}/transfers`, { token }),
+      request(`/api/admin/${slug}/bookings/${ref}`, { method: "PATCH", body: { status }, token, isJwt }),
+    transfers: (slug) => request(`/api/admin/${slug}/transfers`, { token, isJwt }),
     setTransfer: (slug, ref, status) =>
-      request(`/api/admin/${slug}/transfers/${ref}`, { method: "PATCH", body: { status }, token }),
-    conversations: (slug) => request(`/api/admin/${slug}/conversations`, { token }),
-    conversation: (slug, id) => request(`/api/admin/${slug}/conversations/${id}`, { token }),
+      request(`/api/admin/${slug}/transfers/${ref}`, { method: "PATCH", body: { status }, token, isJwt }),
+    conversations: (slug) => request(`/api/admin/${slug}/conversations`, { token, isJwt }),
+    conversation: (slug, id) => request(`/api/admin/${slug}/conversations/${id}`, { token, isJwt }),
     resolve: (slug, id) =>
-      request(`/api/admin/${slug}/conversations/${id}/resolve`, { method: "POST", token }),
-    promos: (slug) => request(`/api/admin/${slug}/promos`, { token }),
-    createPromo: (slug, body) => request(`/api/admin/${slug}/promos`, { method: "POST", body, token }),
-    togglePromo: (slug, code) => request(`/api/admin/${slug}/promos/${code}/toggle`, { method: "PATCH", token }),
-    reviewsPending: (slug) => request(`/api/admin/${slug}/reviews/pending`, { token }),
-    sendReviews: (slug) => request(`/api/admin/${slug}/reviews/send`, { method: "POST", token }),
-    preArrivalPending: (slug) => request(`/api/admin/${slug}/pre-arrival/pending`, { token }),
-    sendPreArrival: (slug) => request(`/api/admin/${slug}/pre-arrival/send`, { method: "POST", token }),
+      request(`/api/admin/${slug}/conversations/${id}/resolve`, { method: "POST", token, isJwt }),
+    promos: (slug) => request(`/api/admin/${slug}/promos`, { token, isJwt }),
+    createPromo: (slug, body) => request(`/api/admin/${slug}/promos`, { method: "POST", body, token, isJwt }),
+    togglePromo: (slug, code) => request(`/api/admin/${slug}/promos/${code}/toggle`, { method: "PATCH", token, isJwt }),
+    reviewsPending: (slug) => request(`/api/admin/${slug}/reviews/pending`, { token, isJwt }),
+    sendReviews: (slug) => request(`/api/admin/${slug}/reviews/send`, { method: "POST", token, isJwt }),
+    preArrivalPending: (slug) => request(`/api/admin/${slug}/pre-arrival/pending`, { token, isJwt }),
+    sendPreArrival: (slug) => request(`/api/admin/${slug}/pre-arrival/send`, { method: "POST", token, isJwt }),
     serviceRequests: (slug, status) =>
-      request(`/api/admin/${slug}/service-requests${status ? `?status=${status}` : ""}`, { token }),
+      request(`/api/admin/${slug}/service-requests${status ? `?status=${status}` : ""}`, { token, isJwt }),
     setServiceRequest: (slug, ref, status) =>
-      request(`/api/admin/${slug}/service-requests/${ref}`, { method: "PATCH", body: { status }, token }),
+      request(`/api/admin/${slug}/service-requests/${ref}`, { method: "PATCH", body: { status }, token, isJwt }),
     calendar: (slug, year, month) =>
-      request(`/api/admin/${slug}/calendar?year=${year}&month=${month}`, { token }),
+      request(`/api/admin/${slug}/calendar?year=${year}&month=${month}`, { token, isJwt }),
+    setCredentials: (slug, email, password) =>
+      request(`/api/admin/${slug}/set-credentials`, { method: "POST", body: { email, password }, token, isJwt }),
+    kb: (slug) => request(`/api/admin/${slug}/kb`, { token, isJwt }),
+    uploadKb: async (slug, file, source) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("source", source);
+      const headers = {};
+      if (token) {
+        if (isJwt) headers["Authorization"] = `Bearer ${token}`;
+        else headers["X-Admin-Token"] = token;
+      }
+      const res = await fetch(`${BASE}/api/admin/${slug}/kb/upload`, { method: "POST", headers, body: form });
+      if (!res.ok) {
+        let detail = res.statusText;
+        try { detail = (await res.json()).detail || detail; } catch {}
+        const err = new Error(typeof detail === "string" ? detail : "Upload failed");
+        err.status = res.status;
+        throw err;
+      }
+      return res.json();
+    },
+    createKb: (slug, body) => request(`/api/admin/${slug}/kb`, { method: "POST", body, token, isJwt }),
+    updateKb: (slug, id, body) => request(`/api/admin/${slug}/kb/${id}`, { method: "PATCH", body, token, isJwt }),
+    deleteKb: (slug, id) => request(`/api/admin/${slug}/kb/${id}`, { method: "DELETE", token, isJwt }),
+    settings: (slug) => request(`/api/admin/${slug}/settings`, { token, isJwt }),
+    updateSettings: (slug, body) => request(`/api/admin/${slug}/settings`, { method: "PATCH", body, token, isJwt }),
+    rooms: (slug) => request(`/api/admin/${slug}/rooms`, { token, isJwt }),
+    createRoom: (slug, body) => request(`/api/admin/${slug}/rooms`, { method: "POST", body, token, isJwt }),
+    updateRoom: (slug, id, body) => request(`/api/admin/${slug}/rooms/${id}`, { method: "PATCH", body, token, isJwt }),
+    deleteRoom: (slug, id) => request(`/api/admin/${slug}/rooms/${id}`, { method: "DELETE", token, isJwt }),
   }),
 };
 

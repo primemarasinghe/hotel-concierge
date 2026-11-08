@@ -4,7 +4,9 @@ import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+import bcrypt
+import jwt as pyjwt
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from openai import AsyncOpenAI
@@ -13,12 +15,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import email_service as em
+from . import rag
 from . import services as svc
 from .agent import ConciergeAgent
 from .config import settings
 from .db import SessionLocal, get_db, init_db
-from .models import (Booking, Conversation, Message, PromoCode, Property, RoomType,
-                     ServiceRequest, TransferRequest)
+from .models import (Booking, Conversation, KnowledgeChunk, Message, PromoCode, Property,
+                     RoomType, ServiceRequest, TransferRequest)
 from .ratelimit import ip_limiter, lookup_limiter, session_limiter
 
 async def _cleanup_limiters():
@@ -152,9 +155,39 @@ def get_property(slug: str, db: Session = Depends(get_db)) -> Property:
     return prop
 
 
-def require_admin(x_admin_token: str = Header(default="")):
-    if x_admin_token != settings.admin_token:
-        raise HTTPException(401, "Invalid admin token")
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+
+class SetCredentialsBody(BaseModel):
+    email: str
+    password: str
+
+
+def require_admin(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+    authorization: str = Header(default=""),
+):
+    # Super-admin: global shared token
+    if x_admin_token and x_admin_token == settings.admin_token:
+        return
+    # Property admin: JWT scoped to this property slug
+    if authorization.startswith("Bearer "):
+        raw = authorization[7:]
+        try:
+            payload = pyjwt.decode(raw, settings.jwt_secret, algorithms=["HS256"])
+            token_slug = payload.get("sub")
+            route_slug = request.path_params.get("slug")
+            if route_slug and token_slug != route_slug:
+                raise HTTPException(403, "Token not valid for this property")
+            return
+        except pyjwt.ExpiredSignatureError:
+            raise HTTPException(401, "Session expired — please sign in again")
+        except pyjwt.InvalidTokenError:
+            raise HTTPException(401, "Invalid token")
+    raise HTTPException(401, "Unauthorized")
 
 
 def _client_ip(request: Request) -> str:
@@ -196,25 +229,34 @@ def health():
 @app.get("/api/properties")
 def list_properties(db: Session = Depends(get_db)):
     return [{"slug": p.slug, "name": p.name, "kind": p.kind, "location": p.location,
-             "currency": p.currency, "assistant_name": p.assistant_name}
+             "currency": p.currency, "assistant_name": p.assistant_name,
+             "accent": (p.contact or {}).get("accent", "#2f5d3a")}
             for p in db.scalars(select(Property).order_by(Property.name))]
+
+
+def _default_greeting(prop: Property) -> str:
+    return f"Hello! I'm {prop.assistant_name} 🙏 your AI concierge at {prop.name}. How can I help you today?"
+
+
+def _default_suggestions(prop: Property) -> list[str]:
+    return [
+        "Check available rooms",
+        "Book airport transfer",
+        f"Things to do in {prop.location.split(',')[0]}",
+        "View my booking",
+    ]
 
 
 @app.get("/api/properties/{slug}")
 def property_public(prop: Property = Depends(get_property)):
-    return {"slug": prop.slug, "name": prop.name, "kind": prop.kind, "location": prop.location,
-            "assistant_name": prop.assistant_name, "currency": prop.currency,
-            "accent": (prop.contact or {}).get("accent", "#2f5d3a"),
-            "greeting": (
-                f"Hello! I'm {prop.assistant_name} 🙏 your AI concierge at {prop.name}. "
-                "How can I help you today?"
-            ),
-            "suggestions": [
-                "Check available rooms",
-                "Book airport transfer",
-                f"Things to do in {prop.location.split(',')[0]}",
-                "View my booking",
-            ]}
+    contact = prop.contact or {}
+    return {
+        "slug": prop.slug, "name": prop.name, "kind": prop.kind, "location": prop.location,
+        "assistant_name": prop.assistant_name, "currency": prop.currency,
+        "accent": contact.get("accent", "#2f5d3a"),
+        "greeting": prop.greeting or _default_greeting(prop),
+        "suggestions": prop.suggestions or _default_suggestions(prop),
+    }
 
 
 class ChatIn(BaseModel):
@@ -406,6 +448,101 @@ def chat_history(session_id: str, prop: Property = Depends(get_property), db: Se
         return {"messages": []}
     return {"messages": [{"role": m.role, "content": m.content, "events": m.events or []}
                          for m in conv.messages]}
+
+
+# ---------------- auth ----------------
+
+@app.post("/api/auth/{slug}/login")
+def auth_login(slug: str, body: LoginBody, db: Session = Depends(get_db)):
+    prop = db.scalar(select(Property).where(Property.slug == slug))
+    if not prop or not prop.admin_email or not prop.admin_password_hash:
+        raise HTTPException(401, "Invalid credentials")
+    if prop.admin_email.lower() != body.email.lower():
+        raise HTTPException(401, "Invalid credentials")
+    if not bcrypt.checkpw(body.password.encode(), prop.admin_password_hash.encode()):
+        raise HTTPException(401, "Invalid credentials")
+    payload = {"sub": slug, "exp": datetime.now(timezone.utc) + timedelta(hours=24)}
+    token = pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+    return {"token": token, "slug": slug, "property": prop.name}
+
+
+# ---------------- super-admin (cross-property management) ----------------
+
+def require_super_admin(x_admin_token: str = Header(default="")):
+    if not x_admin_token or x_admin_token != settings.admin_token:
+        raise HTTPException(401, "Super-admin access required")
+
+super_admin = Depends(require_super_admin)
+
+
+class CreatePropertyBody(BaseModel):
+    name: str
+    slug: str
+    kind: str = "hotel"
+    location: str
+    currency: str = "USD"
+    timezone: str = "Asia/Colombo"
+    reference_prefix: str = "BK"
+    check_in_time: str = "14:00"
+    check_out_time: str = "11:00"
+    assistant_name: str = "Concierge"
+    tone: str = "warm, concise and professional"
+    tax_pct: float = 0
+    service_charge_pct: float = 0
+    free_cancellation_days: int = 7
+    contact: dict = {}
+    admin_email: str
+    admin_password: str
+
+
+@app.get("/api/super/properties", dependencies=[super_admin])
+def super_list_properties(db: Session = Depends(get_db)):
+    props = db.scalars(select(Property)).all()
+    return [
+        {
+            "id": p.id,
+            "slug": p.slug,
+            "name": p.name,
+            "kind": p.kind,
+            "location": p.location,
+            "currency": p.currency,
+            "admin_email": p.admin_email,
+            "has_credentials": bool(p.admin_email and p.admin_password_hash),
+        }
+        for p in props
+    ]
+
+
+@app.post("/api/super/properties", dependencies=[super_admin])
+def super_create_property(body: CreatePropertyBody, db: Session = Depends(get_db)):
+    slug = body.slug.lower().strip().replace(" ", "-")
+    existing = db.scalar(select(Property).where(Property.slug == slug))
+    if existing:
+        raise HTTPException(400, f"Slug '{slug}' is already in use")
+    prop = Property(
+        slug=slug,
+        name=body.name.strip(),
+        kind=body.kind,
+        location=body.location.strip(),
+        currency=body.currency,
+        timezone=body.timezone,
+        reference_prefix=body.reference_prefix.upper()[:6],
+        check_in_time=body.check_in_time,
+        check_out_time=body.check_out_time,
+        assistant_name=body.assistant_name.strip() or "Concierge",
+        tone=body.tone.strip(),
+        tax_pct=body.tax_pct,
+        service_charge_pct=body.service_charge_pct,
+        free_cancellation_days=body.free_cancellation_days,
+        contact=body.contact,
+        meal_plans={"RO": 0},
+        admin_email=body.admin_email.lower().strip(),
+        admin_password_hash=bcrypt.hashpw(body.admin_password.encode(), bcrypt.gensalt()).decode(),
+    )
+    db.add(prop)
+    db.commit()
+    db.refresh(prop)
+    return {"ok": True, "slug": prop.slug, "id": prop.id, "name": prop.name}
 
 
 # ---------------- admin (staff dashboard) ----------------
@@ -632,10 +769,84 @@ def admin_resolve(conv_id: str, prop: Property = Depends(get_property), db: Sess
     return {"ok": True}
 
 
+def _room_out(r: RoomType) -> dict:
+    return {
+        "id": r.id, "code": r.code, "name": r.name, "description": r.description,
+        "beds": r.beds, "size_sqm": r.size_sqm, "max_adults": r.max_adults,
+        "max_children": r.max_children, "amenities": r.amenities or [],
+        "base_rate": r.base_rate, "total_units": r.total_units,
+        "image_url": r.image_url,
+    }
+
+
+class RoomTypeIn(BaseModel):
+    code: str = Field(..., min_length=1, max_length=32)
+    name: str = Field(..., min_length=1, max_length=120)
+    description: str = Field(default="")
+    beds: str = Field(..., min_length=1, max_length=120)
+    size_sqm: int | None = None
+    max_adults: int = Field(..., ge=1)
+    max_children: int = Field(0, ge=0)
+    amenities: list[str] = Field(default_factory=list)
+    base_rate: float = Field(..., gt=0)
+    total_units: int = Field(..., ge=1)
+    image_url: str | None = None
+
+
 @app.get("/api/admin/{slug}/rooms", dependencies=[admin])
 def admin_rooms(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
-    return [{"code": r.code, "name": r.name, "units": r.total_units, "base_rate": r.base_rate}
-            for r in db.scalars(select(RoomType).where(RoomType.property_id == prop.id))]
+    return [_room_out(r) for r in db.scalars(
+        select(RoomType).where(RoomType.property_id == prop.id).order_by(RoomType.id)
+    )]
+
+
+@app.post("/api/admin/{slug}/rooms", dependencies=[admin])
+def admin_create_room(body: RoomTypeIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    r = RoomType(
+        property_id=prop.id, code=body.code.strip().upper(),
+        name=body.name, description=body.description, beds=body.beds,
+        size_sqm=body.size_sqm, max_adults=body.max_adults,
+        max_children=body.max_children, amenities=body.amenities,
+        base_rate=body.base_rate, total_units=body.total_units,
+        image_url=body.image_url or None,
+    )
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return _room_out(r)
+
+
+@app.patch("/api/admin/{slug}/rooms/{room_id}", dependencies=[admin])
+def admin_update_room(room_id: int, body: RoomTypeIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    r = db.scalar(select(RoomType).where(RoomType.id == room_id, RoomType.property_id == prop.id))
+    if not r:
+        raise HTTPException(404, "Room type not found")
+    r.code = body.code.strip().upper()
+    r.name = body.name
+    r.description = body.description
+    r.beds = body.beds
+    r.size_sqm = body.size_sqm
+    r.max_adults = body.max_adults
+    r.max_children = body.max_children
+    r.amenities = body.amenities
+    r.base_rate = body.base_rate
+    r.total_units = body.total_units
+    r.image_url = body.image_url or None
+    db.commit()
+    return _room_out(r)
+
+
+@app.delete("/api/admin/{slug}/rooms/{room_id}", dependencies=[admin])
+def admin_delete_room(room_id: int, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    r = db.scalar(select(RoomType).where(RoomType.id == room_id, RoomType.property_id == prop.id))
+    if not r:
+        raise HTTPException(404, "Room type not found")
+    has_bookings = db.scalar(select(func.count()).select_from(Booking).where(Booking.room_type_id == room_id)) or 0
+    if has_bookings:
+        raise HTTPException(409, f"Cannot delete — {has_bookings} booking(s) reference this room type")
+    db.delete(r)
+    db.commit()
+    return {"ok": True}
 
 
 def _promo_out(pc: PromoCode) -> dict:
@@ -859,6 +1070,163 @@ def admin_send_reviews(prop: Property = Depends(get_property), db: Session = Dep
         b.review_email_sent = True
     db.commit()
     return {"sent": len(rows)}
+
+
+@app.post("/api/admin/{slug}/set-credentials", dependencies=[admin])
+def admin_set_credentials(slug: str, body: SetCredentialsBody, db: Session = Depends(get_db)):
+    prop = db.scalar(select(Property).where(Property.slug == slug))
+    if not prop:
+        raise HTTPException(404, "Property not found")
+    prop.admin_email = body.email.lower().strip()
+    prop.admin_password_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    db.commit()
+    return {"ok": True, "slug": slug, "email": prop.admin_email}
+
+
+# ── Property settings (customise) ─────────────────────────────────────────────
+
+class SettingsBody(BaseModel):
+    assistant_name: str = Field(..., min_length=1, max_length=64)
+    tone: str = Field(..., min_length=1, max_length=200)
+    greeting: str = Field(default="", max_length=500)
+    suggestions: list[str] = Field(default_factory=list)
+    accent: str = Field(default="#2f5d3a", pattern="^#[0-9a-fA-F]{6}$")
+    widget_label: str = Field(default="Chat with us", max_length=50)
+    widget_position: str = Field(default="right", pattern="^(left|right)$")
+
+
+def _settings_out(prop: Property) -> dict:
+    contact = prop.contact or {}
+    return {
+        "assistant_name": prop.assistant_name,
+        "tone": prop.tone,
+        "greeting": prop.greeting or "",
+        "suggestions": prop.suggestions or _default_suggestions(prop),
+        "accent": contact.get("accent", "#2f5d3a"),
+        "widget_label": contact.get("widget_label", "Chat with us"),
+        "widget_position": contact.get("widget_position", "right"),
+    }
+
+
+@app.get("/api/admin/{slug}/settings", dependencies=[admin])
+def admin_get_settings(prop: Property = Depends(get_property)):
+    return _settings_out(prop)
+
+
+@app.patch("/api/admin/{slug}/settings", dependencies=[admin])
+def admin_update_settings(body: SettingsBody, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    prop.assistant_name = body.assistant_name.strip()
+    prop.tone = body.tone.strip()
+    prop.greeting = body.greeting.strip() or None
+    prop.suggestions = [s.strip() for s in body.suggestions if s.strip()] or None
+    contact = prop.contact or {}
+    contact["accent"] = body.accent
+    contact["widget_label"] = body.widget_label.strip()
+    contact["widget_position"] = body.widget_position
+    prop.contact = contact
+    db.commit()
+    return _settings_out(prop)
+
+
+# ── Knowledge base CRUD ───────────────────────────────────────────────────────
+
+class KBChunkIn(BaseModel):
+    source: str = Field(..., min_length=1, max_length=120)
+    content: str = Field(..., min_length=1)
+
+
+@app.get("/api/admin/{slug}/kb", dependencies=[admin])
+def admin_kb_list(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    rows = db.scalars(
+        select(KnowledgeChunk)
+        .where(KnowledgeChunk.property_id == prop.id)
+        .order_by(KnowledgeChunk.id)
+    ).all()
+    return [{"id": r.id, "source": r.source, "content": r.content} for r in rows]
+
+
+@app.post("/api/admin/{slug}/kb", dependencies=[admin])
+def admin_kb_create(body: KBChunkIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    vec = rag.embed_documents([body.content])[0]
+    chunk = KnowledgeChunk(property_id=prop.id, source=body.source, content=body.content, embedding=vec)
+    db.add(chunk)
+    db.commit()
+    db.refresh(chunk)
+    return {"id": chunk.id, "source": chunk.source, "content": chunk.content}
+
+
+@app.patch("/api/admin/{slug}/kb/{chunk_id}", dependencies=[admin])
+def admin_kb_update(chunk_id: int, body: KBChunkIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    chunk = db.scalar(
+        select(KnowledgeChunk).where(
+            KnowledgeChunk.id == chunk_id,
+            KnowledgeChunk.property_id == prop.id,
+        )
+    )
+    if not chunk:
+        raise HTTPException(404, "Chunk not found")
+    chunk.source = body.source
+    chunk.content = body.content
+    chunk.embedding = rag.embed_documents([body.content])[0]
+    db.commit()
+    return {"id": chunk.id, "source": chunk.source, "content": chunk.content}
+
+
+@app.delete("/api/admin/{slug}/kb/{chunk_id}", dependencies=[admin])
+def admin_kb_delete(chunk_id: int, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    chunk = db.scalar(
+        select(KnowledgeChunk).where(
+            KnowledgeChunk.id == chunk_id,
+            KnowledgeChunk.property_id == prop.id,
+        )
+    )
+    if not chunk:
+        raise HTTPException(404, "Chunk not found")
+    db.delete(chunk)
+    db.commit()
+    return {"ok": True}
+
+
+def _extract_text(data: bytes, filename: str) -> str:
+    """Extract plain text from a PDF or DOCX file."""
+    fname = (filename or "").lower()
+    if fname.endswith(".pdf"):
+        import io
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(data))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "\n\n".join(p.strip() for p in pages if p.strip())
+    if fname.endswith(".docx"):
+        import io
+        from docx import Document
+        doc = Document(io.BytesIO(data))
+        return "\n\n".join(p.text.strip() for p in doc.paragraphs if p.text.strip())
+    raise HTTPException(400, "Unsupported file type — upload a PDF or DOCX file")
+
+
+@app.post("/api/admin/{slug}/kb/upload", dependencies=[admin])
+async def admin_kb_upload(
+    file: UploadFile = File(...),
+    source: str = Form(...),
+    prop: Property = Depends(get_property),
+    db: Session = Depends(get_db),
+):
+    if not file.filename:
+        raise HTTPException(400, "No file provided")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File too large — maximum 10 MB")
+    text = _extract_text(data, file.filename)
+    if not text.strip():
+        raise HTTPException(422, "No readable text found in the file")
+    chunks = rag.chunk_markdown(text)
+    if not chunks:
+        raise HTTPException(422, "Could not split file into chunks")
+    vectors = rag.embed_documents(chunks)
+    for content, vec in zip(chunks, vectors):
+        db.add(KnowledgeChunk(property_id=prop.id, source=source.strip(), content=content, embedding=vec))
+    db.commit()
+    return {"ok": True, "chunks_added": len(chunks), "source": source.strip()}
 
 
 # ── Voice: speech-to-text (Whisper) ──────────────────────────────────────────

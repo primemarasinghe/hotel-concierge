@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
     admin_token: str = "change-me"          # simple shared token for the staff dashboard
+    jwt_secret: str = "change-me-jwt-secret"  # sign per-property JWT tokens
     cors_origins: str = "*"                 # comma-separated; restrict in production
     history_turns: int = 20                 # past messages fed back to the agent
     max_tool_rounds: int = 8

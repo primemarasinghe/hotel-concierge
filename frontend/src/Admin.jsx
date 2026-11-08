@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, store, money, fmtDate } from "./api.js";
 import { RichText, EventCard } from "./ChatPanel.jsx";
 
@@ -83,6 +83,65 @@ function Login({ onLogin, error }) {
         {error && <p className="adm-field-err">{error}</p>}
         <button className="adm-btn adm-btn-primary adm-btn-full" disabled={!t.trim()}>
           Sign in
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function PropertyLogin({ slug, onLogin, error }) {
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading]   = useState(false);
+  return (
+    <div className="adm-login">
+      <form
+        className="adm-login-card"
+        onSubmit={async e => {
+          e.preventDefault();
+          setLoading(true);
+          await onLogin(email.trim(), password);
+          setLoading(false);
+        }}
+      >
+        <div className="adm-login-logo">
+          <svg viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="9" fill="var(--accent,#2f5d3a)"/>
+            <path d="M8 26V14l8-6 8 6v12" stroke="rgba(255,255,255,0.95)" strokeWidth="2.1" strokeLinejoin="round"/>
+            <rect x="13" y="18" width="6" height="8" rx="1.5" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8"/>
+          </svg>
+        </div>
+        <h1>Staff Dashboard</h1>
+        <p>Sign in with your property admin credentials to manage bookings and guests.</p>
+        <div className="adm-field">
+          <label htmlFor="adm-email">Email</label>
+          <input
+            id="adm-email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="admin@hotel.com"
+            autoFocus
+            autoComplete="email"
+          />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="adm-pass">Password</label>
+          <input
+            id="adm-pass"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Enter password…"
+            autoComplete="current-password"
+          />
+        </div>
+        {error && <p className="adm-field-err">{error}</p>}
+        <button
+          className="adm-btn adm-btn-primary adm-btn-full"
+          disabled={!email.trim() || !password || loading}
+        >
+          {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
     </div>
@@ -1328,6 +1387,869 @@ function PromoCodes({ a, slug, toast }) {
   );
 }
 
+// ── Super-admin: Properties management ───────────────────────────────────────
+const KINDS     = ["hotel","villa","guesthouse","resort","apartment"];
+const CURRENCIES = ["LKR","USD","EUR","GBP","AUD","SGD","AED"];
+
+const EMPTY_PROP_FORM = {
+  name: "", slug: "", kind: "villa", location: "", currency: "LKR",
+  timezone: "Asia/Colombo", reference_prefix: "", check_in_time: "14:00",
+  check_out_time: "11:00", assistant_name: "Concierge",
+  tone: "warm, concise and professional",
+  tax_pct: 0, service_charge_pct: 0, free_cancellation_days: 7,
+  admin_email: "", admin_password: "",
+};
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9\s-]/g,"").trim().replace(/\s+/g,"-").replace(/-+/g,"-");
+}
+function autoPrefix(slug) {
+  return slug.split("-").map(w => w[0]?.toUpperCase()||"").join("").slice(0,6) || "BK";
+}
+
+function SuperProperties({ token, toast }) {
+  const [rows,    setRows]    = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [form,    setForm]    = useState(EMPTY_PROP_FORM);
+  const [saving,  setSaving]  = useState(false);
+  const [adv,     setAdv]     = useState(false);
+
+  const sa = useMemo(() => api.superAdmin(token), [token]);
+
+  const load = useCallback(() => {
+    sa.listProperties().then(setRows).catch(() => setRows([]));
+  }, [sa]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function set(k, v) {
+    setForm(f => {
+      const next = { ...f, [k]: v };
+      if (k === "name")  { next.slug = slugify(v); next.reference_prefix = autoPrefix(next.slug); }
+      if (k === "slug")  { next.reference_prefix = autoPrefix(v); }
+      return next;
+    });
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await sa.createProperty(form);
+      toast.success(`"${res.name}" created — slug: ${res.slug}`);
+      setCreating(false);
+      setForm(EMPTY_PROP_FORM);
+      load();
+    } catch (err) {
+      toast.error(err.message || "Failed to create property");
+    }
+    setSaving(false);
+  }
+
+  const origin = window.location.origin;
+
+  return (
+    <>
+      <div className="adm-toolbar">
+        <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>Properties</span>
+        {rows && <span className="badge" style={{ background: "var(--line)", color: "var(--muted)" }}>{rows.length}</span>}
+        <button className="adm-btn adm-btn-primary" style={{ marginLeft: "auto" }}
+          onClick={() => { setCreating(c => !c); setForm(EMPTY_PROP_FORM); setAdv(false); }}>
+          {creating ? "Cancel" : "+ New property"}
+        </button>
+      </div>
+
+      {creating && (
+        <form className="prop-form" onSubmit={handleCreate}>
+          <div className="prop-form-grid">
+            <div className="adm-field" style={{ gridColumn: "span 2" }}>
+              <label htmlFor="pf-name">Property name *</label>
+              <input id="pf-name" required value={form.name} placeholder="e.g. Kandy Hills Resort"
+                onChange={e => set("name", e.target.value)} autoFocus />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-slug">Slug (URL key) *</label>
+              <input id="pf-slug" required value={form.slug} placeholder="kandy-hills-resort"
+                style={{ fontFamily: "monospace" }}
+                onChange={e => set("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,""))} />
+              {form.slug && <small className="adm-field-hint">/admin/{form.slug}</small>}
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-kind">Type *</label>
+              <select id="pf-kind" value={form.kind} onChange={e => set("kind", e.target.value)}>
+                {KINDS.map(k => <option key={k} value={k}>{k.charAt(0).toUpperCase()+k.slice(1)}</option>)}
+              </select>
+            </div>
+            <div className="adm-field" style={{ gridColumn: "span 2" }}>
+              <label htmlFor="pf-loc">Location *</label>
+              <input id="pf-loc" required value={form.location} placeholder="Kandy, Central Province, Sri Lanka"
+                onChange={e => set("location", e.target.value)} />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-cur">Currency *</label>
+              <select id="pf-cur" value={form.currency} onChange={e => set("currency", e.target.value)}>
+                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-ref">Reference prefix *</label>
+              <input id="pf-ref" required value={form.reference_prefix} placeholder="KH"
+                maxLength={6} style={{ fontFamily: "monospace", letterSpacing: "0.08em" }}
+                onChange={e => set("reference_prefix", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} />
+              <small className="adm-field-hint">Booking refs: {form.reference_prefix || "??"}240001</small>
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-email">Admin email *</label>
+              <input id="pf-email" type="email" required value={form.admin_email}
+                placeholder="admin@hotel.com" onChange={e => set("admin_email", e.target.value)} />
+            </div>
+            <div className="adm-field">
+              <label htmlFor="pf-pass">Admin password *</label>
+              <input id="pf-pass" type="password" required value={form.admin_password}
+                placeholder="Min 8 characters" minLength={8}
+                onChange={e => set("admin_password", e.target.value)} />
+            </div>
+          </div>
+
+          <button type="button" className="prop-adv-toggle"
+            onClick={() => setAdv(a => !a)}>
+            {adv ? "▾" : "▸"} Advanced settings
+          </button>
+
+          {adv && (
+            <div className="prop-form-grid" style={{ marginTop: 12 }}>
+              <div className="adm-field">
+                <label htmlFor="pf-tz">Timezone</label>
+                <input id="pf-tz" value={form.timezone}
+                  onChange={e => set("timezone", e.target.value)} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="pf-aname">AI assistant name</label>
+                <input id="pf-aname" value={form.assistant_name}
+                  onChange={e => set("assistant_name", e.target.value)} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="pf-ci">Check-in time</label>
+                <input id="pf-ci" type="time" value={form.check_in_time}
+                  onChange={e => set("check_in_time", e.target.value)} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="pf-co">Check-out time</label>
+                <input id="pf-co" type="time" value={form.check_out_time}
+                  onChange={e => set("check_out_time", e.target.value)} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="pf-tax">Tax %</label>
+                <input id="pf-tax" type="number" min="0" max="100" step="0.1" value={form.tax_pct}
+                  onChange={e => set("tax_pct", parseFloat(e.target.value)||0)} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="pf-svc">Service charge %</label>
+                <input id="pf-svc" type="number" min="0" max="100" step="0.1" value={form.service_charge_pct}
+                  onChange={e => set("service_charge_pct", parseFloat(e.target.value)||0)} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="pf-cancel">Free cancellation days</label>
+                <input id="pf-cancel" type="number" min="0" value={form.free_cancellation_days}
+                  onChange={e => set("free_cancellation_days", parseInt(e.target.value)||0)} />
+              </div>
+            </div>
+          )}
+
+          <div className="promo-form-actions" style={{ marginTop: 20 }}>
+            <button type="button" className="adm-btn adm-btn-ghost-sm"
+              onClick={() => setCreating(false)}>Cancel</button>
+            <button type="submit" className="adm-btn adm-btn-primary" disabled={saving}>
+              {saving ? <><span className="adm-spinner"/><span>Creating…</span></> : "Create property"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="table-wrap" style={{ marginTop: creating ? 24 : 0 }}>
+        {rows === null ? (
+          <div style={{ padding: "32px", textAlign: "center", color: "var(--muted)" }}>Loading…</div>
+        ) : rows.length === 0 ? (
+          <div style={{ padding: "32px", textAlign: "center", color: "var(--muted)" }}>
+            No properties yet. Create your first one above.
+          </div>
+        ) : (
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Slug</th>
+                <th>Type</th>
+                <th>Currency</th>
+                <th>Admin login</th>
+                <th className="actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(p => (
+                <tr key={p.slug}>
+                  <td>
+                    <strong>{p.name}</strong>
+                    <small>{p.location}</small>
+                  </td>
+                  <td><code style={{ fontSize: "0.82rem", fontFamily: "monospace" }}>{p.slug}</code></td>
+                  <td><span className="status">{p.kind}</span></td>
+                  <td>{p.currency}</td>
+                  <td>
+                    {p.has_credentials
+                      ? <span style={{ fontSize: "0.84rem" }}>{p.admin_email}</span>
+                      : <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Not set</span>}
+                  </td>
+                  <td className="actions">
+                    <a href={`${origin}/admin/${p.slug}`} target="_blank" rel="noreferrer"
+                      className="adm-btn adm-btn-ghost-sm">Staff login</a>
+                    <a href={`${origin}/widget/${p.slug}`} target="_blank" rel="noreferrer"
+                      className="adm-btn adm-btn-ghost-sm" style={{ marginLeft: 6 }}>Widget</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Knowledge Base editor ─────────────────────────────────────────────────────
+function KnowledgeBase({ a, slug, toast }) {
+  const [rows, setRows] = useState(null);
+  const [editing, setEditing] = useState(null); // null | {id?, source, content}
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadSource, setUploadSource] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const load = useCallback(() => {
+    setRows(null);
+    a.kb(slug).then(setRows).catch(() => setRows([]));
+  }, [a, slug]);
+  useEffect(() => { load(); }, [load]);
+
+  const startAdd = () => setEditing({ source: "", content: "" });
+  const startEdit = (row) => setEditing({ id: row.id, source: row.source, content: row.content });
+  const cancelEdit = () => setEditing(null);
+
+  async function handleSave(e) {
+    e.preventDefault();
+    const { id, source, content } = editing;
+    if (!source.trim() || !content.trim()) return;
+    setSaving(true);
+    try {
+      if (id) {
+        await a.updateKb(slug, id, { source: source.trim(), content: content.trim() });
+        toast.success("Chunk updated");
+      } else {
+        await a.createKb(slug, { source: source.trim(), content: content.trim() });
+        toast.success("Chunk added — AI will use it immediately");
+      }
+      setEditing(null);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id, source) {
+    if (!window.confirm(`Delete this chunk from "${source}"?`)) return;
+    setDeleting(id);
+    try {
+      await a.deleteKb(slug, id);
+      toast.success("Chunk deleted");
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function handleUpload(e) {
+    e.preventDefault();
+    if (!uploadFile || !uploadSource.trim()) return;
+    setUploading(true);
+    try {
+      const result = await a.uploadKb(slug, uploadFile, uploadSource.trim());
+      toast.success(`${result.chunks_added} chunk${result.chunks_added !== 1 ? "s" : ""} added from "${uploadFile.name}"`);
+      setUploadOpen(false);
+      setUploadFile(null);
+      setUploadSource("");
+      if (fileRef.current) fileRef.current.value = "";
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const sources = rows ? [...new Set(rows.map(r => r.source))].sort() : [];
+
+  return (
+    <>
+      <div className="adm-toolbar">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>Knowledge Base</span>
+          {rows && (
+            <span className="badge badge-blue">{rows.length} chunk{rows.length !== 1 ? "s" : ""}</span>
+          )}
+          {rows && sources.length > 0 && (
+            <span style={{ fontSize: "0.78rem", opacity: 0.55 }}>{sources.length} source{sources.length !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+          <button className="adm-btn" onClick={() => { setUploadOpen(o => !o); setEditing(null); }}>
+            {uploadOpen ? "Cancel" : "↑ Upload doc"}
+          </button>
+          <button
+            className="adm-btn adm-btn-primary"
+            onClick={() => { editing && !editing.id ? cancelEdit() : startAdd(); setUploadOpen(false); }}
+          >
+            {editing && !editing.id ? "Cancel" : "+ Add chunk"}
+          </button>
+        </div>
+      </div>
+
+      {uploadOpen && (
+        <form className="kb-form kb-upload-form" onSubmit={handleUpload}>
+          <div className="kb-upload-hint">
+            Upload a <strong>PDF</strong> or <strong>DOCX</strong> file — it will be automatically split into chunks and added to the knowledge base.
+          </div>
+          <div className="adm-field">
+            <label htmlFor="kb-upload-source">Source / Category *</label>
+            <input
+              id="kb-upload-source"
+              required
+              placeholder="e.g. Hotel Fact Sheet, Policies, Dining Menu"
+              value={uploadSource}
+              onChange={e => setUploadSource(e.target.value)}
+              list="kb-sources-list"
+            />
+            {sources.length > 0 && (
+              <datalist id="kb-sources-list">
+                {sources.map(s => <option key={s} value={s} />)}
+              </datalist>
+            )}
+          </div>
+          <div className="adm-field">
+            <label htmlFor="kb-upload-file">File *</label>
+            <input
+              id="kb-upload-file"
+              ref={fileRef}
+              type="file"
+              required
+              accept=".pdf,.docx"
+              className="kb-file-input"
+              onChange={e => {
+                const f = e.target.files?.[0] || null;
+                setUploadFile(f);
+                if (f && !uploadSource.trim()) {
+                  setUploadSource(f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "));
+                }
+              }}
+            />
+            <span className="adm-field-hint">Maximum 10 MB · PDF or DOCX only</span>
+          </div>
+          {uploadFile && (
+            <div className="kb-upload-preview">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>{uploadFile.name}</span>
+              <span style={{ opacity: 0.5 }}>({(uploadFile.size / 1024).toFixed(0)} KB)</span>
+            </div>
+          )}
+          <div className="kb-form-actions">
+            <button type="submit" className="adm-btn adm-btn-primary" disabled={uploading || !uploadFile}>
+              {uploading ? "Uploading & chunking…" : "Upload & add to KB"}
+            </button>
+            <button type="button" className="adm-btn" onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadSource(""); }}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {editing && (
+        <form className="kb-form" onSubmit={handleSave}>
+          <div className="adm-field">
+            <label htmlFor="kb-source">Source / Category *</label>
+            <input
+              id="kb-source"
+              required
+              placeholder="e.g. Policies, FAQ, Dining, Rooms"
+              value={editing.source}
+              onChange={e => setEditing(ed => ({ ...ed, source: e.target.value }))}
+              list="kb-sources-list"
+            />
+            {sources.length > 0 && (
+              <datalist id="kb-sources-list">
+                {sources.map(s => <option key={s} value={s} />)}
+              </datalist>
+            )}
+            <span className="adm-field-hint">Group related chunks under the same source name.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="kb-content">Content *</label>
+            <textarea
+              id="kb-content"
+              required
+              rows={6}
+              placeholder="Enter the knowledge chunk text. Keep each chunk focused on one topic for best retrieval."
+              value={editing.content}
+              onChange={e => setEditing(ed => ({ ...ed, content: e.target.value }))}
+            />
+            <span className="adm-field-hint">{editing.content.length} characters</span>
+          </div>
+          <div className="kb-form-actions">
+            <button type="submit" className="adm-btn adm-btn-primary" disabled={saving}>
+              {saving ? "Saving…" : (editing.id ? "Update chunk" : "Add chunk")}
+            </button>
+            <button type="button" className="adm-btn" onClick={cancelEdit}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {rows === null ? (
+        <div className="adm-spinner-wrap"><span className="adm-spinner" /></div>
+      ) : rows.length === 0 ? (
+        <div className="adm-empty">
+          <p>No knowledge chunks yet.</p>
+          <p style={{ fontSize: "0.85rem", opacity: 0.6 }}>Add chunks to teach the AI about your property's policies, FAQs, facilities, and more.</p>
+        </div>
+      ) : (
+        <div className="kb-list">
+          {rows.map(row => (
+            <div className={`kb-chunk${editing?.id === row.id ? " kb-chunk-editing" : ""}`} key={row.id}>
+              <div className="kb-chunk-header">
+                <span className="kb-source-tag">{row.source}</span>
+                <div className="kb-chunk-actions">
+                  <button
+                    className="adm-btn adm-btn-sm"
+                    onClick={() => editing?.id === row.id ? cancelEdit() : startEdit(row)}
+                  >
+                    {editing?.id === row.id ? "Cancel" : "Edit"}
+                  </button>
+                  <button
+                    className="adm-btn adm-btn-sm adm-btn-danger"
+                    disabled={deleting === row.id}
+                    onClick={() => handleDelete(row.id, row.source)}
+                  >
+                    {deleting === row.id ? "…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+              <p className="kb-chunk-content">{row.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Customize ─────────────────────────────────────────────────────────────────
+const TONE_PRESETS = [
+  { label: "Warm & Professional",   value: "warm, concise and professional" },
+  { label: "Luxury & Formal",       value: "elevated, formal and sophisticated — suitable for luxury properties" },
+  { label: "Casual & Friendly",     value: "casual, friendly and approachable" },
+  { label: "Concise & Efficient",   value: "professional, concise and efficient" },
+];
+
+const CURRENCIES_EXT = ["LKR", "USD", "EUR", "GBP", "AUD", "SGD", "INR", "THB", "MYR", "AED"];
+
+function Customize({ a, slug, toast }) {
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setSug = (i, v) => setForm(f => {
+    const s = [...(f.suggestions || ["", "", "", ""])];
+    s[i] = v;
+    return { ...f, suggestions: s };
+  });
+
+  useEffect(() => {
+    a.settings(slug).then(s => {
+      const sugs = s.suggestions || ["", "", "", ""];
+      while (sugs.length < 4) sugs.push("");
+      setForm({ ...s, suggestions: sugs.slice(0, 4) });
+    }).catch(() => toast.error("Failed to load settings"));
+  }, [a, slug]);
+
+  const isPreset = form ? TONE_PRESETS.some(p => p.value === form.tone) : false;
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await a.updateSettings(slug, {
+        ...form,
+        suggestions: form.suggestions.filter(s => s.trim()),
+      });
+      toast.success("Settings saved — changes are live immediately");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!form) return <div className="adm-spinner-wrap"><span className="adm-spinner" /></div>;
+
+  const previewGreeting = form.greeting.trim() ||
+    `Hello! I'm ${form.assistant_name || "Concierge"} 🙏 your AI concierge at [Property Name]. How can I help you today?`;
+
+  return (
+    <form className="cust-form" onSubmit={handleSave}>
+
+      {/* ── AI Identity ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">AI Agent Identity</h3>
+        <p className="cust-section-desc">How the concierge introduces itself and communicates with guests.</p>
+        <div className="cust-grid-2">
+          <div className="adm-field">
+            <label htmlFor="cust-name">Agent Name *</label>
+            <input id="cust-name" required value={form.assistant_name}
+              onChange={e => set("assistant_name", e.target.value)}
+              placeholder="e.g. Aria, Kai, Concierge" />
+            <span className="adm-field-hint">Name used in greetings and responses.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="cust-tone">Personality / Tone</label>
+            <select id="cust-tone" value={isPreset ? form.tone : "__custom__"}
+              onChange={e => { if (e.target.value !== "__custom__") set("tone", e.target.value); }}>
+              {TONE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              {!isPreset && <option value="__custom__">Custom (see below)</option>}
+            </select>
+          </div>
+        </div>
+        {!isPreset && (
+          <div className="adm-field">
+            <label htmlFor="cust-tone-custom">Custom Tone Description</label>
+            <input id="cust-tone-custom" value={form.tone} onChange={e => set("tone", e.target.value)}
+              placeholder="e.g. formal and elegant with a focus on guest wellbeing" />
+          </div>
+        )}
+        <div className="adm-field">
+          <label htmlFor="cust-greeting">Custom Greeting Message</label>
+          <textarea id="cust-greeting" rows={3} value={form.greeting}
+            onChange={e => set("greeting", e.target.value)}
+            placeholder="Leave blank to use the auto-generated greeting." />
+          <span className="adm-field-hint">Leave blank to auto-generate from property name and agent name.</span>
+        </div>
+        <div className="cust-preview">
+          <span className="cust-preview-label">Preview</span>
+          <p className="cust-preview-text">"{previewGreeting}"</p>
+        </div>
+      </div>
+
+      {/* ── Quick Suggestions ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">Quick Suggestions</h3>
+        <p className="cust-section-desc">Shortcut buttons shown when guests open the chat. Leave blank to hide a slot.</p>
+        <div className="cust-grid-2">
+          {[0, 1, 2, 3].map(i => (
+            <div className="adm-field" key={i}>
+              <label htmlFor={`cust-sug-${i}`}>Suggestion {i + 1}</label>
+              <input id={`cust-sug-${i}`} value={form.suggestions[i] || ""}
+                onChange={e => setSug(i, e.target.value)}
+                placeholder={["Check available rooms", "Book airport transfer", "Things to do nearby", "View my booking"][i]} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Appearance ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">Appearance</h3>
+        <p className="cust-section-desc">Chat widget colours and embed button settings.</p>
+        <div className="cust-grid-3">
+          <div className="adm-field">
+            <label htmlFor="cust-accent">Accent Colour</label>
+            <div className="cust-color-row">
+              <input id="cust-accent-picker" type="color" value={form.accent}
+                onChange={e => set("accent", e.target.value)} className="cust-color-picker" />
+              <input id="cust-accent" value={form.accent}
+                onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) set("accent", e.target.value); }}
+                placeholder="#2f5d3a" style={{ fontFamily: "monospace" }} />
+            </div>
+            <span className="adm-field-hint">Used for buttons, chat bubble, and highlights.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="cust-label">Embed Button Label</label>
+            <input id="cust-label" value={form.widget_label}
+              onChange={e => set("widget_label", e.target.value)}
+              placeholder="e.g. Chat with us" />
+            <span className="adm-field-hint">Text on the floating chat button in embedded widgets.</span>
+          </div>
+          <div className="adm-field">
+            <label>Embed Button Position</label>
+            <div className="cust-toggle-row">
+              {["left", "right"].map(pos => (
+                <button key={pos} type="button"
+                  className={`cust-toggle-btn${form.widget_position === pos ? " cust-toggle-active" : ""}`}
+                  onClick={() => set("widget_position", pos)}>
+                  {pos === "left" ? "← Left" : "Right →"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="cust-accent-preview" style={{ "--cust-accent": form.accent }}>
+          <div className="cust-bubble-preview">
+            <span>{form.widget_label || "Chat with us"}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div className="cust-save-row">
+        <button type="submit" className="adm-btn adm-btn-primary adm-btn-full" disabled={saving}>
+          {saving ? "Saving…" : "Save all settings"}
+        </button>
+      </div>
+
+    </form>
+  );
+}
+
+// ── Rooms & pricing ───────────────────────────────────────────────────────────
+const EMPTY_ROOM = {
+  code: "", name: "", description: "", beds: "", size_sqm: "",
+  max_adults: 2, max_children: 0, amenities: "", base_rate: "", total_units: 1, image_url: "",
+};
+
+function RoomForm({ initial, onSave, onCancel, saving, currency }) {
+  const [f, setF] = useState(initial);
+  const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
+  return (
+    <form className="room-form" onSubmit={e => { e.preventDefault(); onSave(f); }}>
+      <div className="room-form-grid">
+        <div className="adm-field">
+          <label htmlFor="rf-code">Room Code *</label>
+          <input id="rf-code" required placeholder="e.g. STD, DLX, STE"
+            value={f.code} onChange={e => set("code", e.target.value.toUpperCase())}
+            style={{ fontFamily: "monospace", letterSpacing: "0.05em" }} />
+          <span className="adm-field-hint">Short uppercase identifier — used in bookings.</span>
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-name">Room Name *</label>
+          <input id="rf-name" required placeholder="e.g. Deluxe Garden Suite"
+            value={f.name} onChange={e => set("name", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-beds">Bed Configuration *</label>
+          <input id="rf-beds" required placeholder="e.g. King bed, 2 Twin beds"
+            value={f.beds} onChange={e => set("beds", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-size">Size (m²)</label>
+          <input id="rf-size" type="number" min="1" placeholder="e.g. 32"
+            value={f.size_sqm} onChange={e => set("size_sqm", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-adults">Max Adults *</label>
+          <input id="rf-adults" type="number" required min="1" max="20"
+            value={f.max_adults} onChange={e => set("max_adults", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-children">Max Children</label>
+          <input id="rf-children" type="number" min="0" max="10"
+            value={f.max_children} onChange={e => set("max_children", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-rate">Base Rate / Night ({currency}) *</label>
+          <input id="rf-rate" type="number" required min="1" step="0.01" placeholder="e.g. 15000"
+            value={f.base_rate} onChange={e => set("base_rate", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label htmlFor="rf-units">Total Units *</label>
+          <input id="rf-units" type="number" required min="1" placeholder="e.g. 5"
+            value={f.total_units} onChange={e => set("total_units", e.target.value)} />
+          <span className="adm-field-hint">How many rooms of this type exist.</span>
+        </div>
+      </div>
+      <div className="adm-field">
+        <label htmlFor="rf-desc">Description</label>
+        <textarea id="rf-desc" rows={3} placeholder="Short description shown to guests and the AI concierge."
+          value={f.description} onChange={e => set("description", e.target.value)} />
+      </div>
+      <div className="adm-field">
+        <label htmlFor="rf-amenities">Amenities</label>
+        <input id="rf-amenities" placeholder="e.g. AC, Wi-Fi, Mini-bar, En-suite bath (comma-separated)"
+          value={f.amenities} onChange={e => set("amenities", e.target.value)} />
+        <span className="adm-field-hint">Comma-separated list — the AI uses this to answer guest questions.</span>
+      </div>
+      <div className="adm-field">
+        <label htmlFor="rf-img">Image URL</label>
+        <input id="rf-img" type="url" placeholder="https://…"
+          value={f.image_url} onChange={e => set("image_url", e.target.value)} />
+        <span className="adm-field-hint">Shown on the demo page. Use an Unsplash or similar public image URL.</span>
+      </div>
+      <div className="kb-form-actions">
+        <button type="submit" className="adm-btn adm-btn-primary" disabled={saving}>
+          {saving ? "Saving…" : (initial.id ? "Update room" : "Add room")}
+        </button>
+        <button type="button" className="adm-btn" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function Rooms({ a, slug, toast, currency }) {
+  const [rows, setRows] = useState(null);
+  const [editing, setEditing] = useState(null); // null | room object (id=undefined for new)
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+
+  const load = useCallback(() => {
+    setRows(null);
+    a.rooms(slug).then(setRows).catch(() => setRows([]));
+  }, [a, slug]);
+  useEffect(() => { load(); }, [load]);
+
+  function toForm(r) {
+    return { ...r, size_sqm: r.size_sqm ?? "", amenities: (r.amenities || []).join(", "), image_url: r.image_url || "" };
+  }
+  function fromForm(f) {
+    return {
+      code: f.code.trim().toUpperCase(),
+      name: f.name.trim(),
+      description: f.description.trim(),
+      beds: f.beds.trim(),
+      size_sqm: f.size_sqm ? parseInt(f.size_sqm) : null,
+      max_adults: parseInt(f.max_adults),
+      max_children: parseInt(f.max_children) || 0,
+      amenities: f.amenities.split(",").map(s => s.trim()).filter(Boolean),
+      base_rate: parseFloat(f.base_rate),
+      total_units: parseInt(f.total_units),
+      image_url: f.image_url.trim() || null,
+    };
+  }
+
+  async function handleSave(f) {
+    setSaving(true);
+    try {
+      const body = fromForm(f);
+      if (editing.id) {
+        await a.updateRoom(slug, editing.id, body);
+        toast.success("Room updated");
+      } else {
+        await a.createRoom(slug, body);
+        toast.success("Room type added");
+      }
+      setEditing(null);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id, name) {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    setDeleting(id);
+    try {
+      await a.deleteRoom(slug, id);
+      toast.success("Room type deleted");
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="adm-toolbar">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>Rooms &amp; Pricing</span>
+          {rows && <span className="badge badge-blue">{rows.length} room type{rows.length !== 1 ? "s" : ""}</span>}
+          {rows && <span style={{ fontSize: "0.78rem", opacity: 0.55 }}>{rows.reduce((s, r) => s + r.total_units, 0)} total units</span>}
+        </div>
+        <button className="adm-btn adm-btn-primary" style={{ marginLeft: "auto" }}
+          onClick={() => editing && !editing.id ? setEditing(null) : setEditing({ ...EMPTY_ROOM })}>
+          {editing && !editing.id ? "Cancel" : "+ Add room type"}
+        </button>
+      </div>
+
+      {editing && !editing.id && (
+        <RoomForm initial={editing} onSave={handleSave} onCancel={() => setEditing(null)} saving={saving} currency={currency} />
+      )}
+
+      {rows === null ? (
+        <div className="adm-spinner-wrap"><span className="adm-spinner" /></div>
+      ) : rows.length === 0 ? (
+        <div className="adm-empty">
+          <p>No room types yet.</p>
+          <p style={{ fontSize: "0.85rem", opacity: 0.6 }}>Add room types to enable bookings and let the AI concierge quote accurate rates.</p>
+        </div>
+      ) : (
+        <div className="room-list">
+          {rows.map(row => (
+            <div key={row.id}>
+              {editing?.id === row.id ? (
+                <div className="room-card room-card-editing">
+                  <RoomForm initial={toForm(row)} onSave={handleSave} onCancel={() => setEditing(null)} saving={saving} currency={currency} />
+                </div>
+              ) : (
+                <div className="room-card">
+                  {row.image_url && (
+                    <div className="room-card-img-wrap">
+                      <img src={row.image_url} alt={row.name} className="room-card-img"
+                        onError={e => { e.target.parentElement.style.display = "none"; }} />
+                    </div>
+                  )}
+                  <div className="room-card-body">
+                    <div className="room-card-header">
+                      <div className="room-card-title-row">
+                        <span className="room-card-code">{row.code}</span>
+                        <h3 className="room-card-name">{row.name}</h3>
+                      </div>
+                      <div className="kb-chunk-actions">
+                        <button className="adm-btn adm-btn-sm" onClick={() => setEditing(toForm(row))}>Edit</button>
+                        <button className="adm-btn adm-btn-sm adm-btn-danger"
+                          disabled={deleting === row.id}
+                          onClick={() => handleDelete(row.id, row.name)}>
+                          {deleting === row.id ? "…" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="room-card-meta">
+                      <span>{row.beds}</span>
+                      {row.size_sqm && <span>{row.size_sqm} m²</span>}
+                      <span>Up to {row.max_adults} adult{row.max_adults !== 1 ? "s" : ""}{row.max_children > 0 ? ` + ${row.max_children} children` : ""}</span>
+                      <span className="room-card-units">{row.total_units} unit{row.total_units !== 1 ? "s" : ""}</span>
+                    </div>
+                    {row.description && <p className="room-card-desc">{row.description}</p>}
+                    {row.amenities?.length > 0 && (
+                      <div className="room-card-amenities">
+                        {row.amenities.map(a => <span key={a} className="room-amenity-tag">{a}</span>)}
+                      </div>
+                    )}
+                    <div className="room-card-rate">
+                      <span className="room-rate-value">{money(row.base_rate, currency)}</span>
+                      <span className="room-rate-label">per night</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Admin shell ───────────────────────────────────────────────────────────────
 const TABS = [
   ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
@@ -1337,14 +2259,21 @@ const TABS = [
   ["promos",        "Promo Codes",   "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
   ["requests",      "Requests",      "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"],
   ["calendar",      "Calendar",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
+  ["kb",            "Knowledge Base","M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"],
+  ["rooms",         "Rooms",         "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"],
+  ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
 ];
 
-export default function Admin() {
-  const [token,       setToken]       = useState(() => store.get(TOKEN_KEY) || "");
+export default function Admin({ urlSlug = null }) {
+  const isPropertyMode = !!urlSlug;
+  const JWT_KEY = urlSlug ? `hc-jwt-${urlSlug}` : null;
+
+  const [token,       setToken]       = useState(() => !isPropertyMode ? (store.get(TOKEN_KEY) || "") : "");
+  const [jwt,         setJwt]         = useState(() => isPropertyMode  ? (store.get(JWT_KEY)   || "") : "");
   const [loginErr,    setLoginErr]    = useState("");
   const [props,       setProps]       = useState([]);
-  const [slug,        setSlug]        = useState("");
-  const [tab,         setTab]         = useState("overview");
+  const [slug,        setSlug]        = useState(urlSlug || "");
+  const [tab,         setTab]         = useState(isPropertyMode ? "overview" : "properties");
   const [handoffs,    setHandoffs]    = useState(0);
   const [pending,     setPending]     = useState(0);
   const [openSRs,     setOpenSRs]     = useState(0);
@@ -1353,7 +2282,15 @@ export default function Admin() {
   const [refreshing,  setRefreshing]  = useState(false);
   const [tick,        setTick]        = useState(0);   // drives timeSince re-render
   const toast = useToast();
-  const a = useMemo(() => api.admin(token), [token]);
+
+  const authToken = isPropertyMode ? jwt : token;
+  const isJwt     = isPropertyMode;
+  const a = useMemo(() => api.admin(authToken, isJwt), [authToken, isJwt]);
+
+  const clearAuth = useCallback(() => {
+    if (isPropertyMode) { store.del(JWT_KEY); setJwt(""); }
+    else { store.del(TOKEN_KEY); setToken(""); }
+  }, [isPropertyMode, JWT_KEY]);
 
   const refreshBadges = useCallback(() => {
     if (!slug) return;
@@ -1379,12 +2316,12 @@ export default function Admin() {
 
   // Auto-poll every 30 s; pause when the browser tab is hidden
   useEffect(() => {
-    if (!token || !slug) return;
+    if (!authToken || !slug) return;
     const id = setInterval(() => { if (!document.hidden) refreshBadges(); }, POLL_MS);
     const onVis = () => { if (!document.hidden) refreshBadges(); };
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
-  }, [token, slug, refreshBadges]);
+  }, [authToken, slug, refreshBadges]);
 
   // Tick every 15 s so timeSince() text stays fresh
   useEffect(() => {
@@ -1393,20 +2330,28 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
+    if (isPropertyMode && urlSlug) {
+      // Property mode: fetch only this property's public data
+      api.property(urlSlug).then(p => {
+        setProps([p]);
+        setCurrency(p.currency);
+      }).catch(() => {});
+      return;
+    }
+    // Super-admin: fetch all properties
     api.properties().then(list => {
       setProps(list);
       setSlug(s => {
         const chosen = s || list[0]?.slug || "";
-        // Init currency immediately from the list so Transfers never flickers "USD"
         const cur = list.find(p => p.slug === chosen)?.currency;
         if (cur) setCurrency(cur);
         return chosen;
       });
     });
-  }, []);
+  }, [isPropertyMode, urlSlug]);
 
   useEffect(() => {
-    if (!token || !slug) return;
+    if (!authToken || !slug) return;
     a.summary(slug)
       .then(s => {
         setHandoffs(s.open_handoffs);
@@ -1415,15 +2360,34 @@ export default function Admin() {
         setLastRefresh(Date.now());
       })
       .catch(e => {
-        if (e.status === 401) {
-          store.del(TOKEN_KEY);
-          setToken("");
-          setLoginErr("That token wasn't accepted. Check your ADMIN_TOKEN setting.");
+        if (e.status === 401 || e.status === 403) {
+          clearAuth();
+          setLoginErr(isPropertyMode
+            ? "Session expired. Please sign in again."
+            : "That token wasn't accepted. Check your ADMIN_TOKEN setting.");
         }
       });
-  }, [a, token, slug]);
+  }, [a, authToken, slug, clearAuth, isPropertyMode]);
 
-  if (!token)
+  if (!authToken) {
+    if (isPropertyMode) {
+      return (
+        <PropertyLogin
+          slug={urlSlug}
+          error={loginErr}
+          onLogin={async (email, password) => {
+            setLoginErr("");
+            try {
+              const result = await api.auth.login(urlSlug, email, password);
+              store.set(JWT_KEY, result.token);
+              setJwt(result.token);
+            } catch (err) {
+              setLoginErr(err.message || "Invalid email or password");
+            }
+          }}
+        />
+      );
+    }
     return (
       <Login
         error={loginErr}
@@ -1434,6 +2398,7 @@ export default function Admin() {
         }}
       />
     );
+  }
 
   const current = props.find(p => p.slug === slug);
 
@@ -1450,20 +2415,29 @@ export default function Admin() {
           <span>Concierge</span>
         </div>
 
-        <div className="adm-sidebar-prop">
-          <select value={slug} onChange={e => {
-            const next = e.target.value;
-            setSlug(next);
-            const cur = props.find(p => p.slug === next)?.currency;
-            if (cur) setCurrency(cur);
-          }} aria-label="Select property">
-            {props.map(p => <option key={p.slug} value={p.slug}>{p.name}</option>)}
-          </select>
-          {current && <span className="adm-sidebar-location">{current.location}</span>}
-        </div>
+        {isPropertyMode && (
+          <div className="adm-sidebar-prop">
+            <div className="adm-prop-name">{current?.name || urlSlug}</div>
+            {current && <span className="adm-sidebar-location">{current.location}</span>}
+          </div>
+        )}
 
         <nav className="adm-sidebar-nav" aria-label="Admin navigation">
-          {TABS.map(([id, label, iconPath]) => (
+          {!isPropertyMode && (
+            <button
+              className={`adm-nav-item${tab === "properties" ? " adm-nav-active" : ""}`}
+              onClick={() => setTab("properties")}
+              aria-current={tab === "properties" ? "page" : undefined}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"/>
+                <circle cx="19" cy="7" r="4" fill="currentColor" stroke="none" opacity="0.25"/>
+                <path d="M17 7h4M19 5v4"/>
+              </svg>
+              <span>Properties</span>
+            </button>
+          )}
+          {isPropertyMode && TABS.map(([id, label, iconPath]) => (
             <button
               key={id}
               className={`adm-nav-item${tab === id ? " adm-nav-active" : ""}`}
@@ -1508,7 +2482,7 @@ export default function Admin() {
             </svg>
             Guest site
           </a>
-          <button className="link" onClick={() => { store.del(TOKEN_KEY); setToken(""); }}>
+          <button className="link" onClick={clearAuth}>
             Sign out
           </button>
         </div>
@@ -1517,6 +2491,7 @@ export default function Admin() {
       {/* ── Content area ── */}
       <div className="adm-content">
         <main className="admin-main" key={slug}>
+          {!isPropertyMode && tab === "properties" && <SuperProperties token={token} toast={toast}/>}
           {slug && tab === "overview"      && <Overview      a={a} slug={slug} goTo={setTab}/>}
           {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "transfers"     && <Transfers     a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
@@ -1524,6 +2499,9 @@ export default function Admin() {
           {slug && tab === "promos"        && <PromoCodes      a={a} slug={slug} toast={toast}/>}
           {slug && tab === "requests"      && <ServiceRequests a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "calendar"      && <CalendarView    a={a} slug={slug}/>}
+          {slug && tab === "kb"            && <KnowledgeBase   a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "rooms"         && <Rooms           a={a} slug={slug} toast={toast} currency={currency}/>}
+          {slug && tab === "customize"     && <Customize       a={a} slug={slug} toast={toast}/>}
         </main>
       </div>
     </div>

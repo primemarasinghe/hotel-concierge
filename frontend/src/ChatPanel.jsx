@@ -685,7 +685,7 @@ function HistoryPanel({ sessions, currentSid, onSelect, onNewChat, onDelete }) {
   );
 }
 
-export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "" }) {
+export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "", onOpenVoice = null }) {
   const [prop, setProp]         = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState("");
@@ -1149,8 +1149,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             <div className="chat-welcome-ava" aria-hidden="true">{initials}</div>
             <p className="chat-welcome-name">{prop.assistant_name}</p>
             <p className="chat-welcome-sub">{prop.name}</p>
-            <p className="chat-welcome-greeting">Ayubowan 🙏</p>
-            <p className="chat-welcome-hint">Ask me anything about your stay</p>
+            <p className="chat-welcome-greeting">{greeting || "Ayubowan 🙏"}</p>
           </div>
         )}
 
@@ -1212,6 +1211,17 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
 
       {error && <p className="chat-error" role="alert">{error}</p>}
 
+      {/* quick suggestion chips — shown only on empty chat */}
+      {chips.length > 0 && messages.length === 0 && historyCount === 0 && !busy && (
+        <div className="chat-chips" role="group" aria-label="Suggested questions">
+          {chips.map((c) => (
+            <button key={c} className="chat-chip" type="button" onClick={() => send(c)}>
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* input bar */}
       <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(input); }}>
         {recording ? (
@@ -1253,10 +1263,10 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
         <button
           type="button"
           className={`mic-btn${recording ? " mic-btn-recording" : ""}${transcribing ? " mic-btn-busy" : ""}`}
-          onClick={() => recording ? stopAndTranscribe() : startRecording()}
+          onClick={() => onOpenVoice ? onOpenVoice() : (recording ? stopAndTranscribe() : startRecording())}
           disabled={!prop || busy || transcribing}
-          aria-label={recording ? "Stop recording" : "Speak your message"}
-          title={recording ? "Tap to stop" : "Voice input"}
+          aria-label={onOpenVoice ? "Open voice agent" : (recording ? "Stop recording" : "Speak your message")}
+          title={onOpenVoice ? "Talk to AI voice agent" : (recording ? "Tap to stop" : "Voice input")}
         >
           {transcribing ? (
             <span className="adm-spinner" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "#fff" }} />
