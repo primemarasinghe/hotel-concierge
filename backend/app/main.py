@@ -1383,6 +1383,71 @@ def admin_update_settings(body: SettingsBody, prop: Property = Depends(get_prope
     return _settings_out(prop)
 
 
+# ── Property operational settings ─────────────────────────────────────────────
+
+class PropertySettingsBody(BaseModel):
+    check_in_time: str = Field("14:00", pattern=r"^\d{2}:\d{2}$")
+    check_out_time: str = Field("11:00", pattern=r"^\d{2}:\d{2}$")
+    timezone: str = Field("Asia/Colombo", min_length=1, max_length=64)
+    tax_pct: float = Field(0, ge=0, le=100)
+    service_charge_pct: float = Field(0, ge=0, le=100)
+    weekend_uplift_pct: float = Field(0, ge=0, le=100)
+    weekend_days: list[int] = Field(default_factory=lambda: [4, 5])
+    meal_plans: dict = Field(default_factory=lambda: {"RO": 0})
+    free_cancellation_days: int = Field(7, ge=0, le=365)
+    max_stay_nights: int = Field(30, ge=1, le=365)
+
+
+def _property_settings_out(prop: Property) -> dict:
+    return {
+        "check_in_time": prop.check_in_time,
+        "check_out_time": prop.check_out_time,
+        "timezone": prop.timezone,
+        "tax_pct": prop.tax_pct,
+        "service_charge_pct": prop.service_charge_pct,
+        "weekend_uplift_pct": prop.weekend_uplift_pct,
+        "weekend_days": prop.weekend_days or [4, 5],
+        "meal_plans": prop.meal_plans or {"RO": 0},
+        "free_cancellation_days": prop.free_cancellation_days,
+        "max_stay_nights": prop.max_stay_nights,
+    }
+
+
+@app.get("/api/admin/{slug}/property-settings", dependencies=[admin])
+def admin_get_property_settings(prop: Property = Depends(get_property)):
+    return _property_settings_out(prop)
+
+
+@app.patch("/api/admin/{slug}/property-settings", dependencies=[admin])
+def admin_update_property_settings(body: PropertySettingsBody,
+                                    prop: Property = Depends(get_property),
+                                    db: Session = Depends(get_db)):
+    invalid_days = [d for d in body.weekend_days if d not in range(7)]
+    if invalid_days:
+        raise HTTPException(422, "weekend_days values must be 0–6 (Mon=0 … Sun=6)")
+    invalid_plans = [k for k in body.meal_plans if not k.strip()]
+    if invalid_plans:
+        raise HTTPException(422, "Meal plan codes cannot be empty")
+    if len(body.meal_plans) > 10:
+        raise HTTPException(422, "Maximum 10 meal plans allowed")
+    for v in body.meal_plans.values():
+        if not isinstance(v, (int, float)) or v < 0:
+            raise HTTPException(422, "Meal plan prices must be >= 0")
+
+    prop.check_in_time = body.check_in_time
+    prop.check_out_time = body.check_out_time
+    prop.timezone = body.timezone.strip()
+    prop.tax_pct = body.tax_pct
+    prop.service_charge_pct = body.service_charge_pct
+    prop.weekend_uplift_pct = body.weekend_uplift_pct
+    prop.weekend_days = sorted(set(body.weekend_days))
+    prop.meal_plans = {k.strip().upper(): float(v) for k, v in body.meal_plans.items() if k.strip()}
+    prop.free_cancellation_days = body.free_cancellation_days
+    prop.max_stay_nights = body.max_stay_nights
+    db.commit()
+    return _property_settings_out(prop)
+
+
 # ── Knowledge base CRUD ───────────────────────────────────────────────────────
 
 class KBChunkIn(BaseModel):

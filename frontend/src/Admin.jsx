@@ -2065,6 +2065,217 @@ function KnowledgeBase({ a, slug, toast }) {
   );
 }
 
+// ── Property Settings ─────────────────────────────────────────────────────────
+const DAY_LABELS  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MEAL_HINTS  = { RO: "Room Only", EP: "European Plan", BB: "Bed & Breakfast", CP: "Continental Plan", HB: "Half Board", MAP: "Modified American Plan", FB: "Full Board", AI: "All Inclusive" };
+const COMMON_TZ   = ["Asia/Colombo", "Asia/Bangkok", "Asia/Singapore", "Asia/Kuala_Lumpur", "Asia/Jakarta", "Asia/Dubai", "Asia/Mumbai", "Asia/Tokyo", "Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
+
+function PropertySettings({ a, slug, currency, toast }) {
+  const [form,   setForm]   = useState(null);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    a.propertySettings(slug).then(s => {
+      const plans = Object.entries(s.meal_plans || { RO: 0 }).map(([code, price]) => ({ code, price }));
+      setForm({ ...s, meal_plans: plans });
+    }).catch(() => toast.error("Failed to load property settings"));
+  }, [a, slug]);
+
+  function toggleDay(d) {
+    setForm(f => {
+      const days = f.weekend_days.includes(d)
+        ? f.weekend_days.filter(x => x !== d)
+        : [...f.weekend_days, d];
+      return { ...f, weekend_days: days };
+    });
+  }
+
+  function addMealPlan() {
+    setForm(f => ({ ...f, meal_plans: [...f.meal_plans, { code: "", price: 0 }] }));
+  }
+  function updateMealPlan(i, patch) {
+    setForm(f => {
+      const plans = [...f.meal_plans];
+      plans[i] = { ...plans[i], ...patch };
+      return { ...f, meal_plans: plans };
+    });
+  }
+  function deleteMealPlan(i) {
+    setForm(f => ({ ...f, meal_plans: f.meal_plans.filter((_, j) => j !== i) }));
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const meal_plans = {};
+      for (const { code, price } of form.meal_plans) {
+        if (code.trim()) meal_plans[code.trim().toUpperCase()] = parseFloat(price) || 0;
+      }
+      await a.updatePropertySettings(slug, {
+        check_in_time:        form.check_in_time,
+        check_out_time:       form.check_out_time,
+        timezone:             form.timezone,
+        tax_pct:              parseFloat(form.tax_pct)              || 0,
+        service_charge_pct:   parseFloat(form.service_charge_pct)   || 0,
+        weekend_uplift_pct:   parseFloat(form.weekend_uplift_pct)   || 0,
+        weekend_days:         form.weekend_days,
+        meal_plans,
+        free_cancellation_days: parseInt(form.free_cancellation_days) || 0,
+        max_stay_nights:        parseInt(form.max_stay_nights)         || 30,
+      });
+      toast.success("Property settings saved");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!form) return <div className="adm-spinner-wrap"><span className="adm-spinner" /></div>;
+
+  const totalFees = (parseFloat(form.tax_pct) || 0) + (parseFloat(form.service_charge_pct) || 0);
+
+  return (
+    <form className="cust-form" onSubmit={handleSave}>
+
+      {/* ── Check-In / Check-Out ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">Check-In & Check-Out</h3>
+        <p className="cust-section-desc">Times displayed to guests in booking confirmations and the AI concierge.</p>
+        <div className="cust-grid-3">
+          <div className="adm-field">
+            <label htmlFor="ps-ci">Check-In Time</label>
+            <input id="ps-ci" type="time" value={form.check_in_time}
+              onChange={e => set("check_in_time", e.target.value)} />
+          </div>
+          <div className="adm-field">
+            <label htmlFor="ps-co">Check-Out Time</label>
+            <input id="ps-co" type="time" value={form.check_out_time}
+              onChange={e => set("check_out_time", e.target.value)} />
+          </div>
+          <div className="adm-field">
+            <label htmlFor="ps-tz">Timezone</label>
+            <input id="ps-tz" list="ps-tz-list" value={form.timezone}
+              onChange={e => set("timezone", e.target.value)}
+              placeholder="Asia/Colombo" />
+            <datalist id="ps-tz-list">
+              {COMMON_TZ.map(z => <option key={z} value={z} />)}
+            </datalist>
+            <span className="adm-field-hint">Used to calculate today's date accurately.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="ps-cancel">Free Cancellation (days before check-in)</label>
+            <input id="ps-cancel" type="number" min="0" max="365" value={form.free_cancellation_days}
+              onChange={e => set("free_cancellation_days", e.target.value)} />
+            <span className="adm-field-hint">Set 0 to disable free cancellation.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="ps-maxstay">Max Stay (nights)</label>
+            <input id="ps-maxstay" type="number" min="1" max="365" value={form.max_stay_nights}
+              onChange={e => set("max_stay_nights", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Taxes & Fees ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">Taxes & Service Charge</h3>
+        <p className="cust-section-desc">Applied automatically to all booking totals. Combined: <strong>{totalFees.toFixed(1)}%</strong></p>
+        <div className="cust-grid-2">
+          <div className="adm-field">
+            <label htmlFor="ps-tax">Government Tax (%)</label>
+            <input id="ps-tax" type="number" min="0" max="100" step="0.1" value={form.tax_pct}
+              onChange={e => set("tax_pct", e.target.value)} />
+            <span className="adm-field-hint">e.g. VAT, GST — set 0 if not applicable.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="ps-sc">Service Charge (%)</label>
+            <input id="ps-sc" type="number" min="0" max="100" step="0.1" value={form.service_charge_pct}
+              onChange={e => set("service_charge_pct", e.target.value)} />
+            <span className="adm-field-hint">e.g. 10% service charge — set 0 if not applicable.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Weekend Pricing ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">Weekend Pricing</h3>
+        <p className="cust-section-desc">Room rates on selected days are multiplied by <strong>(1 + uplift%)</strong>.</p>
+        <div className="cust-grid-2">
+          <div className="adm-field">
+            <label htmlFor="ps-wknd">Weekend Uplift (%)</label>
+            <input id="ps-wknd" type="number" min="0" max="100" step="0.5" value={form.weekend_uplift_pct}
+              onChange={e => set("weekend_uplift_pct", e.target.value)} />
+            <span className="adm-field-hint">Set 0 to use the same rate every day.</span>
+          </div>
+          <div className="adm-field">
+            <label>Weekend Days</label>
+            <div className="ps-days">
+              {DAY_LABELS.map((d, i) => (
+                <button key={i} type="button"
+                  className={`ps-day-btn${form.weekend_days.includes(i) ? " ps-day-active" : ""}`}
+                  onClick={() => toggleDay(i)}>
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Meal Plans ── */}
+      <div className="cust-section">
+        <h3 className="cust-section-title">Meal Plans</h3>
+        <p className="cust-section-desc">Extra charge per person per night added on top of the room rate. Use 0 for plans included in the rate.</p>
+        <div className="ps-mp-list">
+          <div className="ps-mp-header">
+            <span>Code</span><span>Price per person / night ({currency})</span><span/>
+          </div>
+          {form.meal_plans.map((p, i) => (
+            <div key={i} className="ps-mp-row">
+              <div className="ps-mp-code-wrap">
+                <input className="adm-input ps-mp-code" value={p.code} maxLength={8}
+                  onChange={e => updateMealPlan(i, { code: e.target.value.toUpperCase() })}
+                  placeholder="BB" />
+                {MEAL_HINTS[p.code] && (
+                  <span className="ps-mp-hint">{MEAL_HINTS[p.code]}</span>
+                )}
+              </div>
+              <input className="adm-input" type="number" min="0" step="0.01" value={p.price}
+                onChange={e => updateMealPlan(i, { price: e.target.value })} />
+              <button type="button" className="adm-icon-btn adm-icon-btn-cancel"
+                onClick={() => deleteMealPlan(i)} title="Remove meal plan" aria-label="Remove">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+          ))}
+          <button type="button" className="adm-btn" onClick={addMealPlan}
+            disabled={form.meal_plans.length >= 10}>
+            + Add Meal Plan
+          </button>
+        </div>
+        <div className="ps-mp-shortcuts">
+          {["RO","BB","HB","FB","AI"].filter(c => !form.meal_plans.some(p => p.code === c)).map(c => (
+            <button key={c} type="button" className="ps-shortcut"
+              onClick={() => setForm(f => ({ ...f, meal_plans: [...f.meal_plans, { code: c, price: 0 }] }))}>
+              + {c} <span>{MEAL_HINTS[c]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="cust-save-row">
+        <button type="submit" className="adm-btn adm-btn-primary adm-btn-full" disabled={saving}>
+          {saving ? "Saving…" : "Save property settings"}
+        </button>
+      </div>
+
+    </form>
+  );
+}
+
 // ── Customize ─────────────────────────────────────────────────────────────────
 const TONE_PRESETS = [
   { label: "Warm & Professional",   value: "warm, concise and professional" },
@@ -2844,6 +3055,7 @@ const TABS = [
   ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
   ["notifications", "Notifications", "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"],
   ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
+  ["property",      "Property",      "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"],
 ];
 
 export default function Admin({ urlSlug = null }) {
@@ -3086,7 +3298,8 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "rooms"         && <Rooms           a={a} slug={slug} toast={toast} currency={currency}/>}
           {slug && tab === "seasons"       && <Seasons         a={a} slug={slug} toast={toast}/>}
           {slug && tab === "notifications" && <Notifications   a={a} slug={slug} toast={toast}/>}
-          {slug && tab === "customize"     && <Customize       a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "customize"     && <Customize        a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "property"      && <PropertySettings a={a} slug={slug} currency={currency} toast={toast}/>}
         </main>
       </div>
     </div>
