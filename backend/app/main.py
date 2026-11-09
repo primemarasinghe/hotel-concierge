@@ -21,7 +21,7 @@ from .agent import ConciergeAgent
 from .config import settings
 from .db import SessionLocal, get_db, init_db
 from .models import (Booking, Conversation, KnowledgeChunk, Message, PromoCode, Property,
-                     RoomType, SeasonalRate, ServiceRequest, TransferRequest)
+                     RoomType, SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
 from .ratelimit import ip_limiter, lookup_limiter, session_limiter
 
 async def _cleanup_limiters():
@@ -923,6 +923,91 @@ def admin_delete_season(season_id: int, prop: Property = Depends(get_property), 
     if not s:
         raise HTTPException(404, "Season not found")
     db.delete(s)
+    db.commit()
+    return {"ok": True}
+
+
+# ── Transfer options (routes admin) ──────────────────────────────────────────
+
+class TransferOptionIn(BaseModel):
+    route: str = Field(..., min_length=1, max_length=120)
+    direction: str = Field(..., pattern="^(arrival|departure)$")
+    vehicle: str = Field(..., min_length=1, max_length=40)
+    max_pax: int = Field(..., ge=1, le=100)
+    max_bags: int = Field(0, ge=0, le=100)
+    price: float = Field(..., ge=0)
+    duration_min: int = Field(..., ge=1, le=1440)
+
+
+def _transfer_option_out(o: TransferOption) -> dict:
+    return {
+        "id": o.id,
+        "route": o.route,
+        "direction": o.direction,
+        "vehicle": o.vehicle,
+        "max_pax": o.max_pax,
+        "max_bags": o.max_bags,
+        "price": o.price,
+        "duration_min": o.duration_min,
+    }
+
+
+@app.get("/api/admin/{slug}/transfer-options", dependencies=[admin])
+def admin_transfer_options(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    opts = db.scalars(
+        select(TransferOption).where(TransferOption.property_id == prop.id)
+        .order_by(TransferOption.direction, TransferOption.price)
+    ).all()
+    return [_transfer_option_out(o) for o in opts]
+
+
+@app.post("/api/admin/{slug}/transfer-options", dependencies=[admin])
+def admin_create_transfer_option(body: TransferOptionIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    o = TransferOption(
+        property_id=prop.id,
+        route=body.route.strip(),
+        direction=body.direction,
+        vehicle=body.vehicle.strip(),
+        max_pax=body.max_pax,
+        max_bags=body.max_bags,
+        price=body.price,
+        duration_min=body.duration_min,
+    )
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    return _transfer_option_out(o)
+
+
+@app.patch("/api/admin/{slug}/transfer-options/{option_id}", dependencies=[admin])
+def admin_update_transfer_option(option_id: int, body: TransferOptionIn,
+                                  prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    o = db.scalar(select(TransferOption).where(TransferOption.id == option_id,
+                                                TransferOption.property_id == prop.id))
+    if not o:
+        raise HTTPException(404, "Transfer option not found")
+    o.route = body.route.strip()
+    o.direction = body.direction
+    o.vehicle = body.vehicle.strip()
+    o.max_pax = body.max_pax
+    o.max_bags = body.max_bags
+    o.price = body.price
+    o.duration_min = body.duration_min
+    db.commit()
+    return _transfer_option_out(o)
+
+
+@app.delete("/api/admin/{slug}/transfer-options/{option_id}", dependencies=[admin])
+def admin_delete_transfer_option(option_id: int, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    o = db.scalar(select(TransferOption).where(TransferOption.id == option_id,
+                                                TransferOption.property_id == prop.id))
+    if not o:
+        raise HTTPException(404, "Transfer option not found")
+    in_use = db.scalar(select(func.count()).select_from(TransferRequest)
+                       .where(TransferRequest.option_id == option_id)) or 0
+    if in_use:
+        raise HTTPException(409, f"Cannot delete — {in_use} transfer request(s) reference this route")
+    db.delete(o)
     db.commit()
     return {"ok": True}
 

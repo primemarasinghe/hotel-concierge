@@ -872,6 +872,188 @@ function Transfers({ a, slug, currency, toast, onRefresh }) {
   );
 }
 
+// ── Transfer Routes tab ───────────────────────────────────────────────────────
+const TRO_EMPTY = { route: "", direction: "arrival", vehicle: "", max_pax: 4, max_bags: 4, price: 0, duration_min: 60 };
+
+const TRO_DIR_LABEL = { arrival: "Arrival", departure: "Departure" };
+const TRO_DIR_COLOR = { arrival: "#1565c0", departure: "#c66b00" };
+
+const TRO_VEHICLES = ["Sedan", "Van", "Minibus", "Bus", "Luxury Sedan", "SUV", "Tuk Tuk"];
+
+function TransferRoutes({ a, slug, currency, toast }) {
+  const [list,    setList]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding,  setAdding]  = useState(false);
+  const [editId,  setEditId]  = useState(null);
+  const [form,    setForm]    = useState(TRO_EMPTY);
+  const [busy,    setBusy]    = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    a.transferOptions(slug)
+      .then(d => { setList(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [slug]);
+
+  function startAdd()  { setAdding(true); setEditId(null); setForm(TRO_EMPTY); }
+  function startEdit(o){ setEditId(o.id); setAdding(false); setForm({ route: o.route, direction: o.direction, vehicle: o.vehicle, max_pax: o.max_pax, max_bags: o.max_bags, price: o.price, duration_min: o.duration_min }); }
+  function cancelForm(){ setAdding(false); setEditId(null); setForm(TRO_EMPTY); }
+
+  async function save() {
+    if (!form.route.trim() || !form.vehicle.trim()) return;
+    setBusy(true);
+    try {
+      const body = {
+        ...form,
+        price:        parseFloat(form.price)        || 0,
+        max_pax:      parseInt(form.max_pax)         || 1,
+        max_bags:     parseInt(form.max_bags)         || 0,
+        duration_min: parseInt(form.duration_min)     || 60,
+      };
+      if (editId) {
+        await a.updateTransferOption(slug, editId, body);
+        toast.success("Route updated");
+      } else {
+        await a.createTransferOption(slug, body);
+        toast.success("Route added");
+      }
+      cancelForm();
+      load();
+    } catch (err) {
+      toast.error(err.message || "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function del(id) {
+    if (!confirm("Delete this transfer route?")) return;
+    try {
+      await a.deleteTransferOption(slug, id);
+      toast.success("Route deleted");
+      load();
+    } catch (err) { toast.error(err.message || "Error"); }
+  }
+
+  function RouteForm({ isEdit = false }) {
+    return (
+      <div className="sn-form">
+        <div className="tro-form-grid">
+          <div className="adm-field tro-field-full">
+            <label className="adm-label">Route Description</label>
+            <input className="adm-input" placeholder="e.g. BIA Airport (CMB) → Property"
+              value={form.route} onChange={e => setForm(f => ({ ...f, route: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Direction</label>
+            <select className="adm-input" value={form.direction}
+              onChange={e => setForm(f => ({ ...f, direction: e.target.value }))}>
+              <option value="arrival">Arrival (Airport → Hotel)</option>
+              <option value="departure">Departure (Hotel → Airport)</option>
+            </select>
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Vehicle Type</label>
+            <input className="adm-input" list="tro-vehicles" placeholder="e.g. Sedan, Van, Minibus…"
+              value={form.vehicle} onChange={e => setForm(f => ({ ...f, vehicle: e.target.value }))} />
+            <datalist id="tro-vehicles">
+              {TRO_VEHICLES.map(v => <option key={v} value={v}/>)}
+            </datalist>
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Price ({currency})</label>
+            <input className="adm-input" type="number" min="0" step="0.01"
+              value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Max Passengers</label>
+            <input className="adm-input" type="number" min="1" max="100"
+              value={form.max_pax} onChange={e => setForm(f => ({ ...f, max_pax: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Max Bags</label>
+            <input className="adm-input" type="number" min="0" max="100"
+              value={form.max_bags} onChange={e => setForm(f => ({ ...f, max_bags: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Duration (minutes)</label>
+            <input className="adm-input" type="number" min="1" max="1440"
+              value={form.duration_min} onChange={e => setForm(f => ({ ...f, duration_min: e.target.value }))} />
+          </div>
+        </div>
+        <div className="sn-form-actions">
+          <button className="adm-btn adm-btn-primary" onClick={save}
+            disabled={busy || !form.route.trim() || !form.vehicle.trim()}>
+            {busy ? "Saving…" : isEdit ? "Update Route" : "Add Route"}
+          </button>
+          <button className="adm-btn" onClick={cancelForm}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  const formOpen = adding || editId !== null;
+
+  return (
+    <div className="sn-wrap">
+      <div className="adm-section-head">
+        <div>
+          <h2 className="adm-section-title">Transfer Routes</h2>
+          <p className="adm-section-sub">Airport transfer options offered to guests during chat booking. These routes are shown by the AI concierge.</p>
+        </div>
+        {!formOpen && (
+          <button className="adm-btn adm-btn-primary" onClick={startAdd}>+ Add Route</button>
+        )}
+      </div>
+
+      {adding && <RouteForm />}
+
+      {loading ? (
+        <div className="adm-loading">Loading…</div>
+      ) : list.length === 0 && !adding ? (
+        <div className="adm-empty">
+          No transfer routes yet. Add routes to let guests book airport transfers via the concierge.
+        </div>
+      ) : (
+        <div className="sn-list">
+          {list.map(o => {
+            const dirColor = TRO_DIR_COLOR[o.direction] || "#555";
+            return (
+              <div key={o.id} className="sn-card">
+                {editId === o.id ? (
+                  <RouteForm isEdit />
+                ) : (
+                  <div className="sn-card-inner">
+                    <div className="sn-card-left">
+                      <div className="tro-dir-badge" style={{ background: `${dirColor}18`, color: dirColor }}>
+                        {TRO_DIR_LABEL[o.direction] || o.direction}
+                      </div>
+                      <div className="sn-card-info">
+                        <p className="sn-name">{o.route}</p>
+                        <p className="sn-dates tro-meta">
+                          {o.vehicle} · {o.max_pax} pax · {o.max_bags} bags · {o.duration_min} min
+                        </p>
+                      </div>
+                    </div>
+                    <div className="sn-card-right">
+                      <span className="sn-meta-pill tro-price">
+                        {money(o.price, currency)}
+                      </span>
+                      <button className="adm-btn-sm" onClick={() => startEdit(o)}>Edit</button>
+                      <button className="adm-btn-sm adm-btn-danger" onClick={() => del(o.id)}>Delete</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Conversations tab ─────────────────────────────────────────────────────────
 function Conversations({ a, slug, onChange }) {
   const [list, setList] = useState(null);
@@ -2651,7 +2833,8 @@ function Seasons({ a, slug, toast }) {
 const TABS = [
   ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
   ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
-  ["transfers",     "Transfers",     "M17 8l4 4-4 4M3 12h18"],
+  ["transfers",       "Transfers",       "M17 8l4 4-4 4M3 12h18"],
+  ["transfer-routes", "Transfer Routes", "M2 11V17a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V11M18 7H6L3 11h18L18 7zM8 17a1 1 0 1 0 2 0M14 17a1 1 0 1 0 2 0"],
   ["conversations", "Conversations", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
   ["promos",        "Promo Codes",   "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
   ["requests",      "Requests",      "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"],
@@ -2893,7 +3076,8 @@ export default function Admin({ urlSlug = null }) {
           {!isPropertyMode && tab === "properties" && <SuperProperties token={token} toast={toast}/>}
           {slug && tab === "overview"      && <Overview      a={a} slug={slug} goTo={setTab}/>}
           {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
-          {slug && tab === "transfers"     && <Transfers     a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
+          {slug && tab === "transfers"       && <Transfers       a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
+          {slug && tab === "transfer-routes" && <TransferRoutes  a={a} slug={slug} currency={currency} toast={toast}/>}
           {slug && tab === "conversations" && <Conversations   a={a} slug={slug} onChange={refreshBadges}/>}
           {slug && tab === "promos"        && <PromoCodes      a={a} slug={slug} toast={toast}/>}
           {slug && tab === "requests"      && <ServiceRequests a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}

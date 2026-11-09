@@ -4792,3 +4792,41 @@ details[open].avail-unavail summary::before { content: "− "; }
 .notif-q-guest strong { font: 600 0.9rem/1.2 var(--ui); color: var(--ink); }
 .notif-q-guest span   { font: 400 0.8rem/1 var(--ui); color: var(--muted); }
 .notif-q-date { font: 400 0.82rem/1 var(--ui); color: var(--muted); flex: none; }
+
+/* ═══════════════════════════════════════════════════════════════
+   TRANSFER ROUTES  (Admin.jsx → TransferRoutes component)
+   ═══════════════════════════════════════════════════════════════ */
+
+.tro-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+.tro-field-full { grid-column: 1 / -1; }
+
+.tro-dir-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font: 700 0.78rem/1 var(--ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex: none;
+  min-width: 90px;
+  text-align: center;
+}
+
+.tro-meta { font: 400 0.84rem/1 var(--ui); color: var(--muted); margin: 0; }
+
+.tro-price {
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+  background: color-mix(in srgb, var(--accent) 8%, var(--paper)) !important;
+}
+
+@media (max-width: 600px) {
+  .tro-form-grid { grid-template-columns: 1fr; }
+  .tro-field-full { grid-column: auto; }
+}
