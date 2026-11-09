@@ -942,6 +942,9 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             content: finalContent,
             events: finalEvents,
           }]);
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "hc-unread" }, "*");
+          }
           if (lastWasVoiceRef.current && finalContent) {
             lastWasVoiceRef.current = false;
             speakText(finalContent);
@@ -963,6 +966,9 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             content: finalContent,
             events: finalEvents,
           }]);
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "hc-unread" }, "*");
+          }
         } else {
           setMessages((m) => m.slice(0, -1));
           setError(msgNet);

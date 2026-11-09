@@ -3041,6 +3041,119 @@ function Seasons({ a, slug, toast }) {
   );
 }
 
+// ── Embed Widget tab ──────────────────────────────────────────────────────────
+function Embed({ a, slug }) {
+  const [settings, setSettings] = useState(null);
+  const [copied,   setCopied]   = useState(false);
+
+  useEffect(() => {
+    a.settings(slug).then(setSettings).catch(() => {});
+  }, [a, slug]);
+
+  const host     = window.location.origin;
+  const accent   = settings?.accent           || "#2f5d3a";
+  const position = settings?.widget_position  || "right";
+  const label    = settings?.widget_label     || "Chat with us";
+
+  const snippet = [
+    `<script src="${host}/embed.js"`,
+    `        data-property="${slug}"`,
+    `        data-accent="${accent}"`,
+    `        data-position="${position}"`,
+    `        data-label="${label}"`,
+    `        defer><\/script>`,
+  ].join("\n");
+
+  function copy() {
+    navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    });
+  }
+
+  return (
+    <div className="emb-wrap">
+      <div className="adm-section-head">
+        <div>
+          <h2 className="adm-section-title">Embed Widget</h2>
+          <p className="adm-section-sub">Add the AI concierge to your hotel website with a single line of code.</p>
+        </div>
+        <a href={`/widget/${slug}`} target="_blank" rel="noreferrer" className="adm-btn">
+          Preview widget →
+        </a>
+      </div>
+
+      {/* ── Snippet ── */}
+      <div className="emb-card">
+        <div className="emb-card-head">
+          <span className="emb-card-title">Your embed snippet</span>
+          <button className={`emb-copy-btn${copied ? " emb-copy-done" : ""}`} onClick={copy}>
+            {copied
+              ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg> Copied!</>
+              : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</>
+            }
+          </button>
+        </div>
+        <pre className="emb-snippet">{snippet}</pre>
+        <p className="emb-hint">
+          Paste this just before the <code>&lt;/body&gt;</code> tag on every page of your website.
+          Replace <code>{host}</code> with your production domain when you go live.
+        </p>
+      </div>
+
+      {/* ── Button preview ── */}
+      <div className="emb-card emb-preview-card">
+        <span className="emb-card-title">Button preview</span>
+        <div className="emb-preview-row">
+          <div className="emb-btn-demo" style={{ background: accent }} aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <div className="emb-preview-meta">
+            <strong>Colour</strong> <code>{accent}</code>
+            <strong>Position</strong> <code>{position}</code>
+            <strong>Label</strong> <code>{label}</code>
+          </div>
+        </div>
+        <p className="emb-hint">To change colour, position, or label go to the <strong>Customize</strong> tab.</p>
+      </div>
+
+      {/* ── Install steps ── */}
+      <div className="emb-card">
+        <span className="emb-card-title">How to install</span>
+        <ol className="emb-steps">
+          <li>Copy the snippet above using the <strong>Copy</strong> button.</li>
+          <li>Open your website's HTML file or CMS template (e.g. WordPress footer.php, Wix Custom Code, Webflow Page Settings → Custom Code).</li>
+          <li>Paste it just before the closing <code>&lt;/body&gt;</code> tag.</li>
+          <li>Replace the host URL with your production domain when deploying.</li>
+          <li>Save and publish — the chat button appears on every page automatically.</li>
+        </ol>
+        <div className="emb-platforms">
+          {["WordPress","Wix","Squarespace","Webflow","Shopify","Custom HTML"].map(p => (
+            <span key={p} className="emb-platform">{p}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Test page ── */}
+      <div className="emb-card emb-test-card">
+        <span className="emb-card-title">Test pages</span>
+        <div className="emb-test-links">
+          <a href={`/widget/${slug}`} target="_blank" rel="noreferrer" className="emb-test-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+            Widget standalone — <code>/widget/{slug}</code>
+          </a>
+          <a href="/embed-test.html" target="_blank" rel="noreferrer" className="emb-test-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+            Demo hotel website with embed — <code>/embed-test.html</code>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
   ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
@@ -3056,6 +3169,7 @@ const TABS = [
   ["notifications", "Notifications", "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"],
   ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
   ["property",      "Property",      "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"],
+  ["embed",         "Embed",         "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"],
 ];
 
 export default function Admin({ urlSlug = null }) {
@@ -3300,6 +3414,7 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "notifications" && <Notifications   a={a} slug={slug} toast={toast}/>}
           {slug && tab === "customize"     && <Customize        a={a} slug={slug} toast={toast}/>}
           {slug && tab === "property"      && <PropertySettings a={a} slug={slug} currency={currency} toast={toast}/>}
+          {slug && tab === "embed"         && <Embed            a={a} slug={slug}/>}
         </main>
       </div>
     </div>

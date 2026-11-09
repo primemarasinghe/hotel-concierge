@@ -4909,3 +4909,178 @@ details[open].avail-unavail summary::before { content: "− "; }
 @media (max-width: 600px) {
   .ps-mp-header, .ps-mp-row { grid-template-columns: 1fr 1fr 28px; gap: 6px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   EMBED WIDGET TAB  (Admin.jsx → Embed component)
+   ═══════════════════════════════════════════════════════════════ */
+
+.emb-wrap { display: flex; flex-direction: column; gap: 16px; }
+
+.emb-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.emb-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.emb-card-title {
+  font: 600 0.95rem/1.2 var(--ui);
+  color: var(--ink);
+}
+
+/* Code snippet block */
+.emb-snippet {
+  background: #1a1f2e;
+  color: #a8d8b9;
+  border-radius: 8px;
+  padding: 16px 18px;
+  font: 400 0.82rem/1.7 "SF Mono", "Fira Code", monospace;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+  tab-size: 2;
+}
+
+.emb-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: var(--paper);
+  font: 500 0.82rem/1 var(--ui);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+  flex-shrink: 0;
+}
+.emb-copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.emb-copy-done {
+  border-color: #22c55e !important;
+  color: #16a34a !important;
+  background: #f0fdf4 !important;
+}
+
+.emb-hint {
+  font: 400 0.82rem/1.55 var(--ui);
+  color: var(--muted);
+  margin: 0;
+}
+.emb-hint code {
+  font-family: monospace;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+
+/* Button preview */
+.emb-preview-card { gap: 12px; }
+.emb-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.emb-btn-demo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,.22);
+}
+.emb-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font: 400 0.84rem/1 var(--ui);
+  color: var(--muted);
+}
+.emb-preview-meta strong {
+  display: inline;
+  font-weight: 600;
+  color: var(--ink);
+  margin-right: 6px;
+}
+.emb-preview-meta code {
+  font-family: monospace;
+  font-size: 0.82em;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Install steps */
+.emb-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 400 0.88rem/1.55 var(--ui);
+  color: var(--ink);
+}
+.emb-steps code {
+  font-family: monospace;
+  font-size: 0.82em;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Platform chips */
+.emb-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.emb-platform {
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  font: 500 0.78rem/1 var(--ui);
+  color: var(--accent);
+}
+
+/* Test links */
+.emb-test-card { gap: 10px; }
+.emb-test-links { display: flex; flex-direction: column; gap: 8px; }
+.emb-test-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 0.86rem/1 var(--ui);
+  color: var(--accent);
+  text-decoration: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: border-color .15s, background .15s;
+}
+.emb-test-link:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--paper)); }
+.emb-test-link code {
+  font-family: monospace;
+  font-size: 0.82em;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+@media (max-width: 600px) {
+  .emb-card { padding: 16px; }
+  .emb-snippet { font-size: 0.74rem; padding: 12px 14px; }
+  .emb-preview-row { flex-direction: column; align-items: flex-start; }
+}
