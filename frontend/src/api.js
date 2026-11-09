@@ -113,6 +113,7 @@ export const api = {
     createSeason: (slug, body) => request(`/api/admin/${slug}/seasons`, { method: "POST", body, token, isJwt }),
     updateSeason: (slug, id, body) => request(`/api/admin/${slug}/seasons/${id}`, { method: "PATCH", body, token, isJwt }),
     deleteSeason: (slug, id) => request(`/api/admin/${slug}/seasons/${id}`, { method: "DELETE", token, isJwt }),
+    analytics: (slug) => request(`/api/admin/${slug}/analytics`, { token, isJwt }),
     transferOptions: (slug) => request(`/api/admin/${slug}/transfer-options`, { token, isJwt }),
     createTransferOption: (slug, body) => request(`/api/admin/${slug}/transfer-options`, { method: "POST", body, token, isJwt }),
     updateTransferOption: (slug, id, body) => request(`/api/admin/${slug}/transfer-options/${id}`, { method: "PATCH", body, token, isJwt }),

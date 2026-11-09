@@ -5084,3 +5084,97 @@ details[open].avail-unavail summary::before { content: "− "; }
   .emb-snippet { font-size: 0.74rem; padding: 12px 14px; }
   .emb-preview-row { flex-direction: column; align-items: flex-start; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ANALYTICS  (Admin.jsx → Analytics component)
+   ═══════════════════════════════════════════════════════════════ */
+
+.anl-wrap { display: flex; flex-direction: column; gap: 16px; }
+
+.anl-section {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  overflow: hidden;
+}
+
+/* 2-column grid for side-by-side charts */
+.anl-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Horizontal bar chart */
+.anl-hbar-chart { margin: 0; }
+.anl-hbar-chart figcaption {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+.anl-hbar-chart figcaption strong { font-size: 0.95rem; }
+.anl-hbar-chart figcaption span   { color: var(--muted); font-size: 0.88rem; }
+
+.anl-hbar-list { display: flex; flex-direction: column; gap: 10px; }
+
+.anl-hbar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 90px;
+  align-items: center;
+  gap: 10px;
+}
+
+.anl-hbar-label {
+  font: 500 0.82rem/1.2 var(--ui);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anl-hbar-track {
+  height: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.anl-hbar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.anl-hbar-val {
+  font: 400 0.8rem/1 var(--ui);
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.anl-empty {
+  font: 400 0.84rem/1.5 var(--ui);
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+/* KPI small text */
+.rev-kpi-value small {
+  font-size: 0.65em;
+  font-weight: 400;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+@media (max-width: 768px) {
+  .anl-row-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .anl-section { padding: 16px; }
+  .anl-hbar-row { grid-template-columns: 90px 1fr 72px; gap: 8px; }
+}

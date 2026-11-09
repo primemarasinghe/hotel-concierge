@@ -3041,6 +3041,217 @@ function Seasons({ a, slug, toast }) {
   );
 }
 
+// ── Analytics tab ─────────────────────────────────────────────────────────────
+function OccupancyTrend({ months }) {
+  const [hover, setHover] = useState(null);
+  const max = Math.max(...months.map(m => m.occupancy_pct), 1);
+  return (
+    <figure className="rev-chart">
+      <figcaption>
+        <strong>Occupancy — last 6 months</strong>
+        <span>avg room nights per month</span>
+      </figcaption>
+      <div className="rev-plot" onMouseLeave={() => setHover(null)}>
+        {months.map((m, i) => {
+          const pct = (m.occupancy_pct / 100) * 100;
+          return (
+            <button key={m.month_full} className="rev-col"
+              onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}
+              aria-label={`${m.month_full}: ${m.occupancy_pct}% occupied`}>
+              <span className="rev-bar" style={{
+                height: `${Math.max(pct, m.occupancy_pct > 0 ? 4 : 0)}%`,
+                opacity: m.is_current ? 1 : 0.65,
+              }}/>
+              <span className="rev-x" style={{ fontWeight: m.is_current ? 700 : 400 }}>{m.month}</span>
+              {hover === i && (
+                <span className="rev-tip" role="tooltip">
+                  {m.month_full}
+                  <b>{m.occupancy_pct}% occupied</b>
+                  <small>{m.room_nights} / {m.available} room-nights</small>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </figure>
+  );
+}
+
+function HBarChart({ title, subtitle, rows, valueKey, labelKey, pctKey, formatVal }) {
+  const maxPct = Math.max(...rows.map(r => r[pctKey] || 0), 1);
+  return (
+    <figure className="anl-hbar-chart">
+      <figcaption>
+        <strong>{title}</strong>
+        {subtitle && <span>{subtitle}</span>}
+      </figcaption>
+      <div className="anl-hbar-list">
+        {rows.map((r, i) => (
+          <div key={i} className="anl-hbar-row">
+            <span className="anl-hbar-label">{r[labelKey]}</span>
+            <div className="anl-hbar-track">
+              <div className="anl-hbar-fill" style={{ width: `${Math.max((r[pctKey] || 0) / maxPct * 100, r[pctKey] > 0 ? 2 : 0)}%` }}/>
+            </div>
+            <span className="anl-hbar-val">{formatVal ? formatVal(r[valueKey], r) : r[valueKey]}</span>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="anl-empty">No data yet.</p>}
+      </div>
+    </figure>
+  );
+}
+
+function Analytics({ a, slug }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    a.analytics(slug).then(setData).catch(() => setData({}));
+  }, [a, slug]);
+
+  if (!data) return <div className="adm-loading">Loading analytics…</div>;
+
+  const s        = data.summary  || {};
+  const currency = data.currency || "USD";
+
+  return (
+    <div className="anl-wrap">
+
+      {/* ── KPI strip ── */}
+      <div className="rev-kpis">
+        <div className="rev-kpi">
+          <div className="rev-kpi-label">Total Revenue</div>
+          <div className="rev-kpi-value">{money(s.total_revenue ?? 0, currency)}</div>
+          <div className="rev-kpi-sub">all confirmed bookings</div>
+        </div>
+        <div className="rev-kpi">
+          <div className="rev-kpi-label">Confirmed Bookings</div>
+          <div className="rev-kpi-value">{s.total_bookings ?? 0}</div>
+          <div className="rev-kpi-sub">all time</div>
+        </div>
+        <div className="rev-kpi">
+          <div className="rev-kpi-label">Avg Booking Value</div>
+          <div className="rev-kpi-value">{money(s.avg_booking_value ?? 0, currency)}</div>
+          <div className="rev-kpi-sub">per confirmed booking</div>
+        </div>
+        <div className="rev-kpi">
+          <div className="rev-kpi-label">Avg Stay</div>
+          <div className="rev-kpi-value">{s.avg_nights ?? 0} <small>nights</small></div>
+          <div className="rev-kpi-sub">per booking</div>
+        </div>
+        <div className="rev-kpi">
+          <div className="rev-kpi-label">Avg Lead Time</div>
+          <div className="rev-kpi-value">{s.avg_lead_days ?? 0} <small>days</small></div>
+          <div className="rev-kpi-sub">advance booking window</div>
+        </div>
+        <div className="rev-kpi" style={{ '--urgent-color': (s.cancellation_rate ?? 0) > 20 ? '#ef4444' : undefined }}>
+          <div className="rev-kpi-label">Cancellation Rate</div>
+          <div className="rev-kpi-value" style={{ color: (s.cancellation_rate ?? 0) > 20 ? '#ef4444' : undefined }}>
+            {s.cancellation_rate ?? 0}%
+          </div>
+          <div className="rev-kpi-sub">of all bookings</div>
+        </div>
+      </div>
+
+      {/* ── 12-month revenue ── */}
+      {data.revenue_12m?.length > 0 && (
+        <div className="anl-section">
+          <RevenueTrend months={data.revenue_12m} currency={currency} />
+        </div>
+      )}
+
+      {/* ── 2-col: occupancy + sources ── */}
+      <div className="anl-row-2">
+        {data.occupancy_6m?.length > 0 && (
+          <div className="anl-section">
+            <OccupancyTrend months={data.occupancy_6m} />
+          </div>
+        )}
+        {data.by_source?.length > 0 && (
+          <div className="anl-section">
+            <HBarChart
+              title="Booking Sources"
+              subtitle="confirmed bookings"
+              rows={data.by_source}
+              labelKey="label"
+              valueKey="count"
+              pctKey="pct"
+              formatVal={(v, r) => `${v} (${r.pct}%)`}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── 2-col: room performance + lead time ── */}
+      <div className="anl-row-2">
+        {data.by_room?.length > 0 && (
+          <div className="anl-section">
+            <HBarChart
+              title="Room Type Performance"
+              subtitle="by revenue"
+              rows={data.by_room}
+              labelKey="name"
+              valueKey="revenue"
+              pctKey="revenue"
+              formatVal={(v) => money(v, currency)}
+            />
+          </div>
+        )}
+        {data.lead_time && (
+          <div className="anl-section">
+            <HBarChart
+              title="Booking Lead Time"
+              subtitle="how far in advance guests book"
+              rows={data.lead_time}
+              labelKey="label"
+              valueKey="count"
+              pctKey="pct"
+              formatVal={(v, r) => `${v} (${r.pct}%)`}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── Room detail table ── */}
+      {data.by_room?.length > 0 && (
+        <div className="anl-section">
+          <figure className="anl-hbar-chart">
+            <figcaption><strong>Room Type Detail</strong></figcaption>
+          </figure>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Room Type</th>
+                  <th className="num">Bookings</th>
+                  <th className="num">Room Nights</th>
+                  <th className="num">Revenue</th>
+                  <th className="num">Avg per Booking</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.by_room.map(r => (
+                  <tr key={r.code}>
+                    <td>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.8em", opacity: 0.6, marginRight: 6 }}>{r.code}</span>
+                      {r.name}
+                    </td>
+                    <td className="num">{r.bookings}</td>
+                    <td className="num">{r.nights}</td>
+                    <td className="num">{money(r.revenue, currency)}</td>
+                    <td className="num">{money(r.avg_rate, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
 // ── Embed Widget tab ──────────────────────────────────────────────────────────
 function Embed({ a, slug }) {
   const [settings, setSettings] = useState(null);
@@ -3170,6 +3381,7 @@ const TABS = [
   ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
   ["property",      "Property",      "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"],
   ["embed",         "Embed",         "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"],
+  ["analytics",     "Analytics",     "M18 20V10M12 20V4M6 20v-6"],
 ];
 
 export default function Admin({ urlSlug = null }) {
@@ -3415,6 +3627,7 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "customize"     && <Customize        a={a} slug={slug} toast={toast}/>}
           {slug && tab === "property"      && <PropertySettings a={a} slug={slug} currency={currency} toast={toast}/>}
           {slug && tab === "embed"         && <Embed            a={a} slug={slug}/>}
+          {slug && tab === "analytics"    && <Analytics        a={a} slug={slug}/>}
         </main>
       </div>
     </div>

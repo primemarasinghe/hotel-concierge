@@ -1115,6 +1115,152 @@ def admin_send_pre_arrival(prop: Property = Depends(get_property), db: Session =
     return {"sent": len(rows)}
 
 
+# ── Analytics ────────────────────────────────────────────────────────────────
+
+@app.get("/api/admin/{slug}/analytics", dependencies=[admin])
+def admin_analytics(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    today      = svc.today_at(prop)
+    total_units = sum(r.total_units for r in prop.room_types)
+
+    _SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    _FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+
+    confirmed = db.scalars(
+        select(Booking).where(Booking.property_id == prop.id, Booking.status == "confirmed")
+    ).all()
+
+    all_count = db.scalar(
+        select(func.count()).select_from(Booking).where(Booking.property_id == prop.id)
+    ) or 0
+    cancelled_count = db.scalar(
+        select(func.count()).select_from(Booking).where(
+            Booking.property_id == prop.id, Booking.status == "cancelled"
+        )
+    ) or 0
+
+    total_rev  = sum(b.total_amount for b in confirmed)
+    total_bks  = len(confirmed)
+    avg_value  = round(total_rev / total_bks, 2) if total_bks else 0
+    avg_nights = round(sum((b.check_out - b.check_in).days for b in confirmed) / total_bks, 1) if total_bks else 0
+    lead_days_list = [max((b.check_in - b.created_at.date()).days, 0) for b in confirmed]
+    avg_lead   = round(sum(lead_days_list) / len(lead_days_list)) if lead_days_list else 0
+    cancel_rate = round(cancelled_count / all_count * 100, 1) if all_count else 0
+
+    # 12-month revenue trend
+    revenue_12m = []
+    for i in range(11, -1, -1):
+        tm = today.month - i
+        ty = today.year
+        while tm <= 0:
+            tm += 12; ty -= 1
+        _, tndays = cal.monthrange(ty, tm)
+        mfirst = date(ty, tm, 1)
+        mnext  = mfirst + timedelta(days=tndays)
+        mbks   = [b for b in confirmed if mfirst <= b.check_in < mnext]
+        revenue_12m.append({
+            "month":      _SHORT[tm - 1],
+            "month_full": f"{_FULL[tm - 1]} {ty}",
+            "is_current": ty == today.year and tm == today.month,
+            "revenue":    sum(b.total_amount for b in mbks),
+            "bookings":   len(mbks),
+        })
+
+    # 6-month historical occupancy
+    occupancy_6m = []
+    for i in range(5, -1, -1):
+        tm = today.month - i
+        ty = today.year
+        while tm <= 0:
+            tm += 12; ty -= 1
+        _, tndays = cal.monthrange(ty, tm)
+        mfirst = date(ty, tm, 1)
+        mnext  = mfirst + timedelta(days=tndays)
+        available = total_units * tndays
+        mbks = [b for b in confirmed if b.check_in < mnext and b.check_out > mfirst]
+        occupied = sum(
+            (min(b.check_out, mnext) - max(b.check_in, mfirst)).days * b.units
+            for b in mbks
+        )
+        occupancy_6m.append({
+            "month":        _SHORT[tm - 1],
+            "month_full":   f"{_FULL[tm - 1]} {ty}",
+            "is_current":   ty == today.year and tm == today.month,
+            "occupancy_pct": round(occupied / available * 100, 1) if available else 0,
+            "room_nights":  occupied,
+            "available":    available,
+        })
+
+    # Bookings by source
+    src_map: dict = {}
+    for b in confirmed:
+        src = b.source or "chat"
+        if src not in src_map:
+            src_map[src] = {"count": 0, "revenue": 0.0}
+        src_map[src]["count"]   += 1
+        src_map[src]["revenue"] += b.total_amount
+    total_src = sum(v["count"] for v in src_map.values()) or 1
+    SOURCE_LABELS = {"chat": "AI Concierge", "direct": "Direct", "walk-in": "Walk-in", "phone": "Phone", "ota": "OTA"}
+    by_source = sorted([
+        {
+            "source":  src,
+            "label":   SOURCE_LABELS.get(src, src.title()),
+            "count":   v["count"],
+            "revenue": v["revenue"],
+            "pct":     round(v["count"] / total_src * 100),
+        }
+        for src, v in src_map.items()
+    ], key=lambda x: -x["count"])
+
+    # Room type performance
+    room_map: dict = {}
+    for b in confirmed:
+        rt = b.room_type
+        if rt.id not in room_map:
+            room_map[rt.id] = {"code": rt.code, "name": rt.name, "bookings": 0, "revenue": 0.0, "nights": 0}
+        nights = (b.check_out - b.check_in).days
+        room_map[rt.id]["bookings"] += 1
+        room_map[rt.id]["revenue"]  += b.total_amount
+        room_map[rt.id]["nights"]   += nights * b.units
+    by_room = sorted(room_map.values(), key=lambda x: -x["revenue"])
+    for r in by_room:
+        r["avg_rate"] = round(r["revenue"] / r["bookings"], 2) if r["bookings"] else 0
+
+    # Lead time distribution
+    buckets = [
+        {"label": "Same day",   "count": 0},
+        {"label": "1–7 days",   "count": 0},
+        {"label": "1–4 weeks",  "count": 0},
+        {"label": "1–3 months", "count": 0},
+        {"label": "3+ months",  "count": 0},
+    ]
+    for d in lead_days_list:
+        if   d == 0:  buckets[0]["count"] += 1
+        elif d <=  7: buckets[1]["count"] += 1
+        elif d <= 28: buckets[2]["count"] += 1
+        elif d <= 90: buckets[3]["count"] += 1
+        else:         buckets[4]["count"] += 1
+    total_lead = sum(b["count"] for b in buckets) or 1
+    for b in buckets:
+        b["pct"] = round(b["count"] / total_lead * 100)
+
+    return {
+        "currency": prop.currency,
+        "summary": {
+            "total_bookings":    total_bks,
+            "cancellation_rate": cancel_rate,
+            "total_revenue":     total_rev,
+            "avg_booking_value": avg_value,
+            "avg_nights":        avg_nights,
+            "avg_lead_days":     avg_lead,
+        },
+        "revenue_12m":  revenue_12m,
+        "occupancy_6m": occupancy_6m,
+        "by_source":    by_source,
+        "by_room":      by_room,
+        "lead_time":    buckets,
+    }
+
+
 # ── Service requests ──────────────────────────────────────────────────────────
 
 def _sr_out(sr: ServiceRequest) -> dict:
