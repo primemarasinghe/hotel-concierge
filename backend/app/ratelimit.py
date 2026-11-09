@@ -41,3 +41,6 @@ ip_limiter = RateLimiter(max_requests=200, window_seconds=3600)
 
 # Booking lookup: 10 attempts / 10 min per IP — prevents reference/email enumeration
 lookup_limiter = RateLimiter(max_requests=10, window_seconds=600)
+
+# Admin login: 5 attempts / 15 min per IP — stops password brute-force
+login_limiter = RateLimiter(max_requests=5, window_seconds=900)

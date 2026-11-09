@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -12,31 +14,22 @@ class Base(DeclarativeBase):
 
 
 def init_db() -> None:
-    from . import models  # noqa: F401  (register tables)
+    from . import models  # noqa: F401 — register ORM classes before Alembic runs
 
+    # pgvector must exist before any table that uses it is created
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    Base.metadata.create_all(engine)
-    _migrate()
 
+    # Run all pending Alembic migrations (creates tables on first run,
+    # applies incremental ALTERs on upgrades — never drops data)
+    from alembic.config import Config as AlembicConfig
+    from alembic import command as alembic_command
 
-def _migrate() -> None:
-    """Add columns introduced after initial schema without dropping data."""
-    from sqlalchemy import inspect as sa_inspect
-    inspector = sa_inspect(engine)
-    existing_rt = {c["name"] for c in inspector.get_columns("room_types")}
-    existing_p = {c["name"] for c in inspector.get_columns("properties")}
-    with engine.begin() as conn:
-        if "image_url" not in existing_rt:
-            conn.execute(text("ALTER TABLE room_types ADD COLUMN image_url VARCHAR(500)"))
-        if "admin_email" not in existing_p:
-            conn.execute(text("ALTER TABLE properties ADD COLUMN admin_email VARCHAR(200)"))
-        if "admin_password_hash" not in existing_p:
-            conn.execute(text("ALTER TABLE properties ADD COLUMN admin_password_hash VARCHAR(200)"))
-        if "greeting" not in existing_p:
-            conn.execute(text("ALTER TABLE properties ADD COLUMN greeting VARCHAR(500)"))
-        if "suggestions" not in existing_p:
-            conn.execute(text("ALTER TABLE properties ADD COLUMN suggestions JSON"))
+    ini_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
+    )
+    alembic_cfg = AlembicConfig(ini_path)
+    alembic_command.upgrade(alembic_cfg, "head")
 
 
 def get_db():

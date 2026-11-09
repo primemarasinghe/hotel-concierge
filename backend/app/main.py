@@ -20,9 +20,9 @@ from . import services as svc
 from .agent import ConciergeAgent
 from .config import settings
 from .db import SessionLocal, get_db, init_db
-from .models import (Booking, Conversation, KnowledgeChunk, Message, PromoCode, Property,
+from .models import (Booking, Conversation, Experience, KnowledgeChunk, Message, PromoCode, Property,
                      RoomType, SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
-from .ratelimit import ip_limiter, lookup_limiter, session_limiter
+from .ratelimit import ip_limiter, login_limiter, lookup_limiter, session_limiter
 
 async def _cleanup_limiters():
     while True:
@@ -105,8 +105,24 @@ async def _review_email_scheduler():
             print(f"[pre-arrival-scheduler] sent {n2} pre-arrival email(s)")
 
 
+_WEAK_SECRETS = {"change-me", "change-me-jwt-secret", "secret", "password", "admin", ""}
+
+def _check_secrets() -> None:
+    errors = []
+    if settings.admin_token in _WEAK_SECRETS or len(settings.admin_token) < 16:
+        errors.append("ADMIN_TOKEN is not set or is too weak (minimum 16 characters).")
+    if settings.jwt_secret in _WEAK_SECRETS or len(settings.jwt_secret) < 16:
+        errors.append("JWT_SECRET is not set or is too weak (minimum 16 characters).")
+    if errors:
+        for msg in errors:
+            print(f"[startup] SECURITY ERROR: {msg}")
+        print("[startup] Set strong secrets in your .env file before starting the server.")
+        raise RuntimeError("Refusing to start with insecure default secrets.")
+
+
 @asynccontextmanager
 async def lifespan(_app):
+    _check_secrets()
     init_db()
     task1 = asyncio.create_task(_cleanup_limiters())
     task2 = asyncio.create_task(_review_email_scheduler())
@@ -191,13 +207,11 @@ def require_admin(
 
 
 def _client_ip(request: Request) -> str:
-    """Real client IP, respecting X-Forwarded-For from a trusted reverse proxy."""
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("X-Real-IP", "")
+    """Real client IP from X-Real-IP (nginx sets this to $remote_addr — not client-controllable).
+    X-Forwarded-For is not set by our proxy and can be forged by clients, so it is ignored."""
+    real_ip = request.headers.get("X-Real-IP", "").strip()
     if real_ip:
-        return real_ip.strip()
+        return real_ip
     return request.client.host if request.client else "unknown"
 
 
@@ -357,15 +371,15 @@ async def chat_stream(request: Request, body: ChatIn, background_tasks: Backgrou
 
         yield f"data: {json.dumps({'type': 'done', 'session_id': body.session_id})}\n\n"
 
-        # Emails fire after client receives done — they don't feel this delay
+        # Emails scheduled as background tasks — run after stream closes, never block the generator
         for event in agent.events:
             if event["type"] == "booking_created":
                 ref = event["data"]["reference"]
                 b = db.scalar(select(Booking).where(Booking.reference == ref))
                 if b:
                     bd = _booking_email_data(b)
-                    em.booking_received(bd, pd)
-                    em.staff_new_booking(bd, pd)
+                    background_tasks.add_task(em.booking_received, bd, pd)
+                    background_tasks.add_task(em.staff_new_booking, bd, pd)
 
     return StreamingResponse(
         generate(),
@@ -453,7 +467,14 @@ def chat_history(session_id: str, prop: Property = Depends(get_property), db: Se
 # ---------------- auth ----------------
 
 @app.post("/api/auth/{slug}/login")
-def auth_login(slug: str, body: LoginBody, db: Session = Depends(get_db)):
+def auth_login(request: Request, slug: str, body: LoginBody, db: Session = Depends(get_db)):
+    ok, retry = login_limiter.check(_client_ip(request))
+    if not ok:
+        raise HTTPException(
+            429,
+            "Too many login attempts. Please wait before trying again.",
+            headers={"Retry-After": str(retry)},
+        )
     prop = db.scalar(select(Property).where(Property.slug == slug))
     if not prop or not prop.admin_email or not prop.admin_password_hash:
         raise HTTPException(401, "Invalid credentials")
@@ -1008,6 +1029,79 @@ def admin_delete_transfer_option(option_id: int, prop: Property = Depends(get_pr
     if in_use:
         raise HTTPException(409, f"Cannot delete — {in_use} transfer request(s) reference this route")
     db.delete(o)
+    db.commit()
+    return {"ok": True}
+
+
+class ExperienceIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    category: str = Field(..., min_length=1, max_length=40)
+    description: str = Field(..., min_length=1, max_length=2000)
+    duration: str = Field(..., min_length=1, max_length=40)
+    price: float | None = Field(None, ge=0)
+    tags: list[str] = Field(default_factory=list)
+    family_friendly: bool = True
+
+
+def _experience_out(e: Experience) -> dict:
+    return {
+        "id": e.id, "name": e.name, "category": e.category,
+        "description": e.description, "duration": e.duration,
+        "price": e.price, "tags": e.tags or [],
+        "family_friendly": e.family_friendly,
+    }
+
+
+@app.get("/api/admin/{slug}/experiences", dependencies=[admin])
+def admin_experiences(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    exps = db.scalars(
+        select(Experience).where(Experience.property_id == prop.id)
+        .order_by(Experience.category, Experience.name)
+    ).all()
+    return [_experience_out(e) for e in exps]
+
+
+@app.post("/api/admin/{slug}/experiences", dependencies=[admin])
+def admin_create_experience(body: ExperienceIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    e = Experience(
+        property_id=prop.id,
+        name=body.name.strip(),
+        category=body.category.strip().lower(),
+        description=body.description.strip(),
+        duration=body.duration.strip(),
+        price=body.price,
+        tags=[t.strip().lower() for t in body.tags if t.strip()],
+        family_friendly=body.family_friendly,
+    )
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    return _experience_out(e)
+
+
+@app.patch("/api/admin/{slug}/experiences/{exp_id}", dependencies=[admin])
+def admin_update_experience(exp_id: int, body: ExperienceIn,
+                             prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    e = db.scalar(select(Experience).where(Experience.id == exp_id, Experience.property_id == prop.id))
+    if not e:
+        raise HTTPException(404, "Experience not found")
+    e.name = body.name.strip()
+    e.category = body.category.strip().lower()
+    e.description = body.description.strip()
+    e.duration = body.duration.strip()
+    e.price = body.price
+    e.tags = [t.strip().lower() for t in body.tags if t.strip()]
+    e.family_friendly = body.family_friendly
+    db.commit()
+    return _experience_out(e)
+
+
+@app.delete("/api/admin/{slug}/experiences/{exp_id}", dependencies=[admin])
+def admin_delete_experience(exp_id: int, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    e = db.scalar(select(Experience).where(Experience.id == exp_id, Experience.property_id == prop.id))
+    if not e:
+        raise HTTPException(404, "Experience not found")
+    db.delete(e)
     db.commit()
     return {"ok": True}
 
@@ -1876,8 +1970,14 @@ VOICE SESSION RULES — you are speaking aloud, not texting. These override the 
                                 ))
                                 if b:
                                     bd, pd = _booking_email_data(b), _prop_email_data(prop)
-                                    em.booking_received(bd, pd)
-                                    em.staff_new_booking(bd, pd)
+                                    _loop = asyncio.get_event_loop()
+                                    async def _send_voice_emails(_bd=bd, _pd=pd):
+                                        try:
+                                            await _loop.run_in_executor(None, em.booking_received, _bd, _pd)
+                                            await _loop.run_in_executor(None, em.staff_new_booking, _bd, _pd)
+                                        except Exception as _e:
+                                            print(f"[VOICE] email error: {_e}")
+                                    asyncio.create_task(_send_voice_emails())
                             except Exception as mail_exc:
                                 print(f"[VOICE] email error: {mail_exc}")
                     elif name == "request_guest_details":

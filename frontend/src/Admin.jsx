@@ -3365,11 +3365,181 @@ function Embed({ a, slug }) {
   );
 }
 
+// ── Experiences tab ───────────────────────────────────────────────────────────
+const EXP_EMPTY = { name: "", category: "", description: "", duration: "", price: "", tags: "", family_friendly: true };
+const EXP_CATEGORIES = ["adventure", "cultural", "culinary", "wellness", "nature", "water sports", "sightseeing", "family"];
+const EXP_CAT_COLORS = { adventure:"#c66b00", cultural:"#7c3aed", culinary:"#c2410c", wellness:"#0d9488", nature:"#15803d", "water sports":"#1d4ed8", sightseeing:"#0369a1", family:"#be185d" };
+function expCatColor(cat) { return EXP_CAT_COLORS[cat] || "#555"; }
+
+function Experiences({ a, slug, currency, toast }) {
+  const [list,    setList]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding,  setAdding]  = useState(false);
+  const [editId,  setEditId]  = useState(null);
+  const [form,    setForm]    = useState(EXP_EMPTY);
+  const [busy,    setBusy]    = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    a.experiences(slug).then(d => { setList(d); setLoading(false); }).catch(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [slug]);
+
+  function startAdd()   { setAdding(true);  setEditId(null); setForm(EXP_EMPTY); }
+  function startEdit(e) { setEditId(e.id);  setAdding(false); setForm({ name: e.name, category: e.category, description: e.description, duration: e.duration, price: e.price ?? "", tags: (e.tags || []).join(", "), family_friendly: e.family_friendly }); }
+  function cancelForm() { setAdding(false); setEditId(null); setForm(EXP_EMPTY); }
+
+  async function save() {
+    if (!form.name.trim() || !form.category.trim() || !form.description.trim() || !form.duration.trim()) return;
+    setBusy(true);
+    try {
+      const body = {
+        name: form.name.trim(),
+        category: form.category.trim(),
+        description: form.description.trim(),
+        duration: form.duration.trim(),
+        price: form.price !== "" && form.price !== null ? parseFloat(form.price) : null,
+        tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
+        family_friendly: form.family_friendly,
+      };
+      if (editId) {
+        await a.updateExperience(slug, editId, body);
+        toast.success("Experience updated");
+      } else {
+        await a.createExperience(slug, body);
+        toast.success("Experience added");
+      }
+      cancelForm(); load();
+    } catch (err) { toast.error(err.message || "Save failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function del(id) {
+    if (!confirm("Delete this experience?")) return;
+    try { await a.deleteExperience(slug, id); toast.success("Deleted"); load(); }
+    catch (err) { toast.error(err.message || "Error"); }
+  }
+
+  function ExpForm({ isEdit = false }) {
+    return (
+      <div className="sn-form">
+        <div className="tro-form-grid">
+          <div className="adm-field tro-field-full">
+            <label className="adm-label">Experience Name</label>
+            <input className="adm-input" placeholder="e.g. Sunrise Safari at Minneriya"
+              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Category</label>
+            <input className="adm-input" list="exp-categories" placeholder="e.g. adventure"
+              value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
+            <datalist id="exp-categories">{EXP_CATEGORIES.map(c => <option key={c} value={c}/>)}</datalist>
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Duration</label>
+            <input className="adm-input" placeholder="e.g. 3 hours, Half day"
+              value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Price per person ({currency}) — leave blank if free / on request</label>
+            <input className="adm-input" type="number" min="0" step="0.01" placeholder="Leave blank = free / on request"
+              value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
+          </div>
+          <div className="adm-field tro-field-full">
+            <label className="adm-label">Description</label>
+            <textarea className="adm-input" rows={3} placeholder="Describe the experience for guests…"
+              value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div className="adm-field tro-field-full">
+            <label className="adm-label">Tags (comma-separated)</label>
+            <input className="adm-input" placeholder="e.g. wildlife, jeep, early morning"
+              value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
+          </div>
+          <div className="adm-field">
+            <label className="adm-label">Family Friendly</label>
+            <label className="exp-toggle">
+              <input type="checkbox" checked={form.family_friendly}
+                onChange={e => setForm(f => ({ ...f, family_friendly: e.target.checked }))} />
+              <span>{form.family_friendly ? "Yes — suitable for children" : "No — adults only"}</span>
+            </label>
+          </div>
+        </div>
+        <div className="sn-form-actions">
+          <button className="adm-btn adm-btn-primary" onClick={save}
+            disabled={busy || !form.name.trim() || !form.category.trim() || !form.description.trim() || !form.duration.trim()}>
+            {busy ? "Saving…" : isEdit ? "Update Experience" : "Add Experience"}
+          </button>
+          <button className="adm-btn" onClick={cancelForm}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  const formOpen = adding || editId !== null;
+
+  return (
+    <div className="sn-wrap">
+      <div className="adm-section-head">
+        <div>
+          <h2 className="adm-section-title">Experiences</h2>
+          <p className="adm-section-sub">Activities and experiences the AI concierge recommends to guests.</p>
+        </div>
+        {!formOpen && <button className="adm-btn adm-btn-primary" onClick={startAdd}>+ Add Experience</button>}
+      </div>
+
+      {adding && <ExpForm />}
+
+      {loading ? (
+        <div className="adm-loading">Loading…</div>
+      ) : list.length === 0 && !adding ? (
+        <div className="adm-empty">No experiences yet. Add activities for the AI to recommend to guests.</div>
+      ) : (
+        <div className="sn-list">
+          {list.map(e => {
+            const color = expCatColor(e.category);
+            return (
+              <div key={e.id} className="sn-card">
+                {editId === e.id ? <ExpForm isEdit /> : (
+                  <div className="sn-card-inner">
+                    <div className="sn-card-left">
+                      <div className="tro-dir-badge" style={{ background: `${color}18`, color }}>{e.category}</div>
+                      <div className="sn-card-info">
+                        <p className="sn-name">{e.name}</p>
+                        <p className="sn-dates tro-meta">
+                          {e.duration}
+                          {e.family_friendly && <span className="exp-family-pill">Family friendly</span>}
+                        </p>
+                        {e.tags.length > 0 && (
+                          <div className="exp-tags">
+                            {e.tags.map(t => <span key={t} className="exp-tag">{t}</span>)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="sn-card-right">
+                      <span className="sn-meta-pill tro-price">
+                        {e.price != null ? money(e.price, currency) + "/person" : "Free / on request"}
+                      </span>
+                      <button className="adm-btn-sm" onClick={() => startEdit(e)}>Edit</button>
+                      <button className="adm-btn-sm adm-btn-danger" onClick={() => del(e.id)}>Delete</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
   ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
   ["transfers",       "Transfers",       "M17 8l4 4-4 4M3 12h18"],
   ["transfer-routes", "Transfer Routes", "M2 11V17a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V11M18 7H6L3 11h18L18 7zM8 17a1 1 0 1 0 2 0M14 17a1 1 0 1 0 2 0"],
+  ["experiences",    "Experiences",    "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"],
   ["conversations", "Conversations", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
   ["promos",        "Promo Codes",   "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
   ["requests",      "Requests",      "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"],
@@ -3616,6 +3786,7 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "transfers"       && <Transfers       a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "transfer-routes" && <TransferRoutes  a={a} slug={slug} currency={currency} toast={toast}/>}
+          {slug && tab === "experiences"    && <Experiences     a={a} slug={slug} currency={currency} toast={toast}/>}
           {slug && tab === "conversations" && <Conversations   a={a} slug={slug} onChange={refreshBadges}/>}
           {slug && tab === "promos"        && <PromoCodes      a={a} slug={slug} toast={toast}/>}
           {slug && tab === "requests"      && <ServiceRequests a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}

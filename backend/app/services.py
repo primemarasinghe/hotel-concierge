@@ -7,7 +7,7 @@ import secrets
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .models import (Booking, Experience, PromoCode, Property, RoomType,
@@ -215,8 +215,10 @@ def create_booking(db: Session, prop: Property, *, room_type_code: str, check_in
         raise BookingError("Full name, a valid email address and a phone number are required.")
 
     try:
-        # lock the room type row so two simultaneous bookings can't take the last unit
-        db.execute(select(RoomType).where(RoomType.id == rt.id).with_for_update())
+        # Advisory lock keyed on room_type_id — blocks any concurrent booking for the
+        # same room type until this transaction commits or rolls back. Prevents the race
+        # where two simultaneous requests both pass the availability check and both commit.
+        db.execute(text("SELECT pg_advisory_xact_lock(1, :rid)"), {"rid": rt.id})
         if units_available(db, rt, check_in, check_out) < units:
             raise BookingError(f"Sorry, {rt.name} is no longer available for those dates.")
         q = quote(db, prop, rt, check_in, check_out, adults, children, units, meal_plan, promo_code)
@@ -282,7 +284,7 @@ def modify_booking(db: Session, prop: Property, b: Booking, *, check_in: date | 
     validate_occupancy(b.room_type, ad, ch, b.units)
 
     try:
-        db.execute(select(RoomType).where(RoomType.id == b.room_type_id).with_for_update())
+        db.execute(text("SELECT pg_advisory_xact_lock(1, :rid)"), {"rid": b.room_type_id})
         if units_available(db, b.room_type, ci, co, exclude_booking_id=b.id) < b.units:
             raise BookingError("The room isn't available for the new dates.")
         q = quote(db, prop, b.room_type, ci, co, ad, ch, b.units, mp)

@@ -5178,3 +5178,10 @@ details[open].avail-unavail summary::before { content: "− "; }
   .anl-section { padding: 16px; }
   .anl-hbar-row { grid-template-columns: 90px 1fr 72px; gap: 8px; }
 }
+
+/* ── Experiences tab ─────────────────────────────────────────────────────── */
+.exp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.exp-tag  { background: #f1f5f9; color: #475569; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+.exp-family-pill { background: #dcfce7; color: #15803d; font-size: 11px; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+.exp-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #374151; padding: 8px 0; }
+.exp-toggle input { width: 16px; height: 16px; cursor: pointer; }
