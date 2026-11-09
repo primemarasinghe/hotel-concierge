@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from . import email_service as em
@@ -274,7 +274,7 @@ def property_public(prop: Property = Depends(get_property)):
 
 
 class ChatIn(BaseModel):
-    session_id: str = Field(min_length=8, max_length=64)
+    session_id: str = Field(min_length=32, max_length=64)
     message: str = Field(min_length=1, max_length=2000)
     lang: str = Field("en", pattern="^(en|si|ta)$")
 
@@ -456,7 +456,10 @@ def guest_cancel_booking(reference: str, body: GuestCancelIn,
 
 
 @app.get("/api/properties/{slug}/chat/{session_id}")
-def chat_history(session_id: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+def chat_history(request: Request, session_id: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    ok, retry = lookup_limiter.check(_client_ip(request))
+    if not ok:
+        raise HTTPException(429, "Too many requests", headers={"Retry-After": str(retry)})
     conv = db.get(Conversation, session_id)
     if not conv or conv.property_id != prop.id:
         return {"messages": []}
@@ -1213,53 +1216,88 @@ def admin_send_pre_arrival(prop: Property = Depends(get_property), db: Session =
 
 @app.get("/api/admin/{slug}/analytics", dependencies=[admin])
 def admin_analytics(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
-    today      = svc.today_at(prop)
+    today       = svc.today_at(prop)
     total_units = sum(r.total_units for r in prop.room_types)
+    pid         = prop.id
 
     _SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     _FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 
-    confirmed = db.scalars(
-        select(Booking).where(Booking.property_id == prop.id, Booking.status == "confirmed")
-    ).all()
+    # ── Summary KPIs (all via SQL aggregations — no full table scan in Python) ──
+    kpi = db.execute(text("""
+        SELECT
+            COUNT(*)                                                        AS total_bks,
+            COALESCE(SUM(total_amount), 0)                                  AS total_rev,
+            COALESCE(AVG(total_amount), 0)                                  AS avg_value,
+            COALESCE(AVG((check_out - check_in)::int), 0)                   AS avg_nights,
+            COALESCE(AVG(GREATEST((check_in - created_at::date)::int, 0)),0) AS avg_lead
+        FROM bookings
+        WHERE property_id = :pid AND status = 'confirmed'
+    """), {"pid": pid}).mappings().one()
 
-    all_count = db.scalar(
-        select(func.count()).select_from(Booking).where(Booking.property_id == prop.id)
-    ) or 0
-    cancelled_count = db.scalar(
-        select(func.count()).select_from(Booking).where(
-            Booking.property_id == prop.id, Booking.status == "cancelled"
-        )
-    ) or 0
+    all_count = db.scalar(select(func.count()).select_from(Booking).where(Booking.property_id == pid)) or 0
+    cancelled = db.scalar(select(func.count()).select_from(Booking).where(
+        Booking.property_id == pid, Booking.status == "cancelled")) or 0
 
-    total_rev  = sum(b.total_amount for b in confirmed)
-    total_bks  = len(confirmed)
-    avg_value  = round(total_rev / total_bks, 2) if total_bks else 0
-    avg_nights = round(sum((b.check_out - b.check_in).days for b in confirmed) / total_bks, 1) if total_bks else 0
-    lead_days_list = [max((b.check_in - b.created_at.date()).days, 0) for b in confirmed]
-    avg_lead   = round(sum(lead_days_list) / len(lead_days_list)) if lead_days_list else 0
-    cancel_rate = round(cancelled_count / all_count * 100, 1) if all_count else 0
+    total_bks   = kpi["total_bks"] or 0
+    total_rev   = float(kpi["total_rev"])
+    avg_value   = round(float(kpi["avg_value"]), 2)
+    avg_nights  = round(float(kpi["avg_nights"]), 1)
+    avg_lead    = round(float(kpi["avg_lead"]))
+    cancel_rate = round(cancelled / all_count * 100, 1) if all_count else 0
 
-    # 12-month revenue trend
+    # ── 12-month revenue trend (SQL GROUP BY month) ───────────────────────────
+    _m12, _y12 = today.month - 11, today.year
+    while _m12 <= 0:
+        _m12 += 12; _y12 -= 1
+    start_12m = date(_y12, _m12, 1)
+    # Build a full 12-slot skeleton first (handles months with 0 bookings)
+    rev_rows = {
+        row["ym"]: row for row in db.execute(text("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', check_in), 'YYYY-MM') AS ym,
+                COALESCE(SUM(total_amount), 0)                     AS revenue,
+                COUNT(*)                                           AS bookings
+            FROM bookings
+            WHERE property_id = :pid
+              AND status = 'confirmed'
+              AND check_in >= :start
+            GROUP BY DATE_TRUNC('month', check_in)
+        """), {"pid": pid, "start": start_12m}).mappings().all()
+    }
     revenue_12m = []
     for i in range(11, -1, -1):
         tm = today.month - i
         ty = today.year
         while tm <= 0:
             tm += 12; ty -= 1
-        _, tndays = cal.monthrange(ty, tm)
-        mfirst = date(ty, tm, 1)
-        mnext  = mfirst + timedelta(days=tndays)
-        mbks   = [b for b in confirmed if mfirst <= b.check_in < mnext]
+        ym  = f"{ty}-{tm:02d}"
+        row = rev_rows.get(ym, {})
         revenue_12m.append({
             "month":      _SHORT[tm - 1],
             "month_full": f"{_FULL[tm - 1]} {ty}",
             "is_current": ty == today.year and tm == today.month,
-            "revenue":    sum(b.total_amount for b in mbks),
-            "bookings":   len(mbks),
+            "revenue":    float(row.get("revenue", 0)),
+            "bookings":   int(row.get("bookings", 0)),
         })
 
-    # 6-month historical occupancy
+    # ── 6-month occupancy (load only bookings overlapping the window) ─────────
+    start_6m = date(today.year, today.month, 1)
+    for _ in range(5):
+        m = start_6m.month - 1 or 12
+        y = start_6m.year - (1 if start_6m.month == 1 else 0)
+        start_6m = date(y, m, 1)
+
+    occ_bookings = db.execute(text("""
+        SELECT check_in, check_out, units
+        FROM bookings
+        WHERE property_id = :pid
+          AND status = 'confirmed'
+          AND check_out  > :start
+          AND check_in   < :end
+    """), {"pid": pid, "start": start_6m,
+           "end": date(today.year, today.month, 1) + timedelta(days=32)}).mappings().all()
+
     occupancy_6m = []
     for i in range(5, -1, -1):
         tm = today.month - i
@@ -1267,75 +1305,85 @@ def admin_analytics(prop: Property = Depends(get_property), db: Session = Depend
         while tm <= 0:
             tm += 12; ty -= 1
         _, tndays = cal.monthrange(ty, tm)
-        mfirst = date(ty, tm, 1)
-        mnext  = mfirst + timedelta(days=tndays)
+        mfirst    = date(ty, tm, 1)
+        mnext     = mfirst + timedelta(days=tndays)
         available = total_units * tndays
-        mbks = [b for b in confirmed if b.check_in < mnext and b.check_out > mfirst]
-        occupied = sum(
-            (min(b.check_out, mnext) - max(b.check_in, mfirst)).days * b.units
-            for b in mbks
+        occupied  = sum(
+            (min(b["check_out"], mnext) - max(b["check_in"], mfirst)).days * b["units"]
+            for b in occ_bookings
+            if b["check_in"] < mnext and b["check_out"] > mfirst
         )
         occupancy_6m.append({
-            "month":        _SHORT[tm - 1],
-            "month_full":   f"{_FULL[tm - 1]} {ty}",
-            "is_current":   ty == today.year and tm == today.month,
+            "month":         _SHORT[tm - 1],
+            "month_full":    f"{_FULL[tm - 1]} {ty}",
+            "is_current":    ty == today.year and tm == today.month,
             "occupancy_pct": round(occupied / available * 100, 1) if available else 0,
-            "room_nights":  occupied,
-            "available":    available,
+            "room_nights":   occupied,
+            "available":     available,
         })
 
-    # Bookings by source
-    src_map: dict = {}
-    for b in confirmed:
-        src = b.source or "chat"
-        if src not in src_map:
-            src_map[src] = {"count": 0, "revenue": 0.0}
-        src_map[src]["count"]   += 1
-        src_map[src]["revenue"] += b.total_amount
-    total_src = sum(v["count"] for v in src_map.values()) or 1
+    # ── Bookings by source (SQL GROUP BY) ─────────────────────────────────────
     SOURCE_LABELS = {"chat": "AI Concierge", "direct": "Direct", "walk-in": "Walk-in", "phone": "Phone", "ota": "OTA"}
-    by_source = sorted([
-        {
-            "source":  src,
-            "label":   SOURCE_LABELS.get(src, src.title()),
-            "count":   v["count"],
-            "revenue": v["revenue"],
-            "pct":     round(v["count"] / total_src * 100),
-        }
-        for src, v in src_map.items()
-    ], key=lambda x: -x["count"])
+    src_rows = db.execute(text("""
+        SELECT COALESCE(source, 'chat') AS source,
+               COUNT(*)                AS count,
+               SUM(total_amount)       AS revenue
+        FROM bookings
+        WHERE property_id = :pid AND status = 'confirmed'
+        GROUP BY COALESCE(source, 'chat')
+        ORDER BY count DESC
+    """), {"pid": pid}).mappings().all()
+    total_src = sum(r["count"] for r in src_rows) or 1
+    by_source = [{
+        "source":  r["source"],
+        "label":   SOURCE_LABELS.get(r["source"], r["source"].title()),
+        "count":   int(r["count"]),
+        "revenue": float(r["revenue"]),
+        "pct":     round(int(r["count"]) / total_src * 100),
+    } for r in src_rows]
 
-    # Room type performance
-    room_map: dict = {}
-    for b in confirmed:
-        rt = b.room_type
-        if rt.id not in room_map:
-            room_map[rt.id] = {"code": rt.code, "name": rt.name, "bookings": 0, "revenue": 0.0, "nights": 0}
-        nights = (b.check_out - b.check_in).days
-        room_map[rt.id]["bookings"] += 1
-        room_map[rt.id]["revenue"]  += b.total_amount
-        room_map[rt.id]["nights"]   += nights * b.units
-    by_room = sorted(room_map.values(), key=lambda x: -x["revenue"])
-    for r in by_room:
-        r["avg_rate"] = round(r["revenue"] / r["bookings"], 2) if r["bookings"] else 0
+    # ── Room type performance (SQL GROUP BY with JOIN) ─────────────────────────
+    room_rows = db.execute(text("""
+        SELECT rt.id, rt.code, rt.name,
+               COUNT(b.id)                              AS bookings,
+               COALESCE(SUM(b.total_amount), 0)         AS revenue,
+               COALESCE(SUM((b.check_out - b.check_in) * b.units), 0) AS nights
+        FROM bookings b
+        JOIN room_types rt ON rt.id = b.room_type_id
+        WHERE b.property_id = :pid AND b.status = 'confirmed'
+        GROUP BY rt.id, rt.code, rt.name
+        ORDER BY revenue DESC
+    """), {"pid": pid}).mappings().all()
+    by_room = [{
+        "code":     r["code"], "name": r["name"],
+        "bookings": int(r["bookings"]),
+        "revenue":  float(r["revenue"]),
+        "nights":   int(r["nights"]),
+        "avg_rate": round(float(r["revenue"]) / int(r["bookings"]), 2) if r["bookings"] else 0,
+    } for r in room_rows]
 
-    # Lead time distribution
-    buckets = [
-        {"label": "Same day",   "count": 0},
-        {"label": "1–7 days",   "count": 0},
-        {"label": "1–4 weeks",  "count": 0},
-        {"label": "1–3 months", "count": 0},
-        {"label": "3+ months",  "count": 0},
-    ]
-    for d in lead_days_list:
-        if   d == 0:  buckets[0]["count"] += 1
-        elif d <=  7: buckets[1]["count"] += 1
-        elif d <= 28: buckets[2]["count"] += 1
-        elif d <= 90: buckets[3]["count"] += 1
-        else:         buckets[4]["count"] += 1
-    total_lead = sum(b["count"] for b in buckets) or 1
-    for b in buckets:
-        b["pct"] = round(b["count"] / total_lead * 100)
+    # ── Lead time distribution (SQL CASE bucketing) ───────────────────────────
+    lt_rows = db.execute(text("""
+        SELECT
+            CASE
+                WHEN GREATEST((check_in - created_at::date)::int, 0) = 0  THEN 0
+                WHEN GREATEST((check_in - created_at::date)::int, 0) <= 7  THEN 1
+                WHEN GREATEST((check_in - created_at::date)::int, 0) <= 28 THEN 2
+                WHEN GREATEST((check_in - created_at::date)::int, 0) <= 90 THEN 3
+                ELSE 4
+            END AS bucket,
+            COUNT(*) AS count
+        FROM bookings
+        WHERE property_id = :pid AND status = 'confirmed'
+        GROUP BY bucket
+        ORDER BY bucket
+    """), {"pid": pid}).mappings().all()
+    lt_map  = {int(r["bucket"]): int(r["count"]) for r in lt_rows}
+    labels  = ["Same day", "1–7 days", "1–4 weeks", "1–3 months", "3+ months"]
+    total_lead = sum(lt_map.values()) or 1
+    buckets = [{"label": lbl, "count": lt_map.get(i, 0),
+                "pct": round(lt_map.get(i, 0) / total_lead * 100)}
+               for i, lbl in enumerate(labels)]
 
     return {
         "currency": prop.currency,

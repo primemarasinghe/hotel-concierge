@@ -28,7 +28,7 @@ def today_at(prop: Property) -> date:
 
 
 def now_at(prop: Property) -> datetime:
-    return datetime.now(ZoneInfo(prop.timezone)).replace(tzinfo=None)
+    return datetime.now(ZoneInfo(prop.timezone))
 
 
 def new_reference(prefix: str) -> str:
@@ -329,7 +329,11 @@ def request_transfer(db: Session, prop: Property, *, option_id: int, guest_name:
         raise BookingError("Unknown transfer option.")
     if passengers > opt.max_pax or bags > opt.max_bags:
         raise BookingError(f"{opt.vehicle} takes up to {opt.max_pax} passengers and {opt.max_bags} bags; choose a larger vehicle.")
-    if pickup_at < now_at(prop) + timedelta(hours=12):
+    # pickup_at arrives as a naive property-local datetime from the agent;
+    # attach the property timezone so the comparison against now_at() (tz-aware) is correct
+    tz = ZoneInfo(prop.timezone)
+    pickup_aware = pickup_at.replace(tzinfo=tz) if pickup_at.tzinfo is None else pickup_at.astimezone(tz)
+    if pickup_aware < now_at(prop) + timedelta(hours=12):
         raise BookingError("Transfers need at least 12 hours' notice; for sooner pickups please call the front desk.")
     booking_id = None
     if booking_reference:

@@ -15,13 +15,6 @@ class Settings(BaseSettings):
     history_turns: int = 20                 # past messages fed back to the agent
     max_tool_rounds: int = 8
 
-    # ── Gemini Live (voice agent) ─────────────────────────────────────────────
-    # Use GEMINI_API_KEY for Google AI Studio (easiest), OR set vertex_project_id
-    # + GOOGLE_APPLICATION_CREDENTIALS for Vertex AI (needs roles/aiplatform.user).
-    gemini_api_key: str = ""
-    vertex_project_id: str = ""
-    vertex_location: str = "us-central1"
-
     # ── Email (optional) ─────────────────────────────────────────────────────
     # Leave smtp_host empty to disable all email (safe default for dev/demo).
     smtp_host: str = ""
