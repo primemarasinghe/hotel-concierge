@@ -194,6 +194,8 @@ class ConciergeAgent:
         kw["phone"] = kw.pop("guest_phone", kw.pop("phone", ""))
         b = svc.create_booking(self.db, self.prop, check_in=_d(kw.pop("check_in")),
                                check_out=_d(kw.pop("check_out")), session_id=self.conv.id, **kw)
+        self.conv.booking_reference = b.reference
+        self.db.flush()
         out = svc.booking_summary(b)
         self.events.append({"type": "booking_created", "data": out})
         return out

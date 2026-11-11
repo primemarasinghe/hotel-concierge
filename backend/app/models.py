@@ -191,6 +191,7 @@ class Conversation(Base):
     property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
     handoff_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     handoff_reason: Mapped[str] = mapped_column(Text, default="")
+    booking_reference: Mapped[str | None] = mapped_column(String(20), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -223,5 +224,7 @@ class ServiceRequest(Base):
     category: Mapped[str] = mapped_column(String(40))
     details: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="open")  # open|in_progress|done
+    assigned_to: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    staff_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

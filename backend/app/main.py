@@ -816,6 +816,7 @@ def admin_conversations(prop: Property = Depends(get_property), db: Session = De
     for c in convs:
         last = c.messages[-1] if c.messages else None
         out.append({"id": c.id, "handoff_requested": c.handoff_requested, "handoff_reason": c.handoff_reason,
+                    "booking_reference": c.booking_reference,
                     "messages": len(c.messages), "last_at": c.last_at.isoformat(),
                     "preview": (last.content.replace("**", "")[:120] if last else "")})
     return out
@@ -827,6 +828,7 @@ def admin_conversation(conv_id: str, prop: Property = Depends(get_property), db:
     if not c or c.property_id != prop.id:
         raise HTTPException(404, "Conversation not found")
     return {"id": c.id, "handoff_requested": c.handoff_requested, "handoff_reason": c.handoff_reason,
+            "booking_reference": c.booking_reference,
             "messages": [{"role": m.role, "content": m.content, "tools_used": m.tools_used, "events": m.events or [],
                           "at": m.created_at.isoformat()} for m in c.messages]}
 
@@ -1457,6 +1459,7 @@ def _sr_out(sr: ServiceRequest) -> dict:
     return {
         "reference": sr.reference, "category": sr.category, "details": sr.details,
         "status": sr.status, "guest_name": sr.guest_name, "session_id": sr.session_id,
+        "assigned_to": sr.assigned_to or "", "staff_notes": sr.staff_notes or "",
         "created_at": sr.created_at.isoformat(), "updated_at": sr.updated_at.isoformat(),
     }
 
@@ -1470,16 +1473,27 @@ def admin_service_requests(status: str | None = None, prop: Property = Depends(g
     return [_sr_out(sr) for sr in rows]
 
 
+class ServiceRequestUpdateIn(BaseModel):
+    status: str | None = None
+    assigned_to: str | None = None
+    staff_notes: str | None = None
+
+
 @app.patch("/api/admin/{slug}/service-requests/{reference}", dependencies=[admin])
-def admin_set_service_request(reference: str, body: StatusIn,
+def admin_set_service_request(reference: str, body: ServiceRequestUpdateIn,
                                prop: Property = Depends(get_property), db: Session = Depends(get_db)):
-    if body.status not in ("open", "in_progress", "done"):
-        raise HTTPException(400, "Invalid status")
     sr = db.scalar(select(ServiceRequest).where(
         ServiceRequest.property_id == prop.id, ServiceRequest.reference == reference))
     if not sr:
         raise HTTPException(404, "Service request not found")
-    sr.status = body.status
+    if body.status is not None:
+        if body.status not in ("open", "in_progress", "done"):
+            raise HTTPException(400, "Invalid status")
+        sr.status = body.status
+    if body.assigned_to is not None:
+        sr.assigned_to = body.assigned_to.strip() or None
+    if body.staff_notes is not None:
+        sr.staff_notes = body.staff_notes.strip() or None
     db.commit()
     return _sr_out(sr)
 

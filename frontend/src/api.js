@@ -80,8 +80,8 @@ export const api = {
     resendConfirmation: (slug, ref) => request(`/api/admin/${slug}/bookings/${ref}/resend`, { method: "POST", token, isJwt }),
     serviceRequests: (slug, status) =>
       request(`/api/admin/${slug}/service-requests${status ? `?status=${status}` : ""}`, { token, isJwt }),
-    setServiceRequest: (slug, ref, status) =>
-      request(`/api/admin/${slug}/service-requests/${ref}`, { method: "PATCH", body: { status }, token, isJwt }),
+    setServiceRequest: (slug, ref, update) =>
+      request(`/api/admin/${slug}/service-requests/${ref}`, { method: "PATCH", body: update, token, isJwt }),
     calendar: (slug, year, month) =>
       request(`/api/admin/${slug}/calendar?year=${year}&month=${month}`, { token, isJwt }),
     setCredentials: (slug, email, password) =>

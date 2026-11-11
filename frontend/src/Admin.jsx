@@ -542,11 +542,11 @@ function downloadCSV(content, filename) {
 }
 
 // ── Bookings tab ──────────────────────────────────────────────────────────────
-function Bookings({ a, slug, toast, onRefresh }) {
+function Bookings({ a, slug, toast, onRefresh, initialSearch = "", onJumpConsumed }) {
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState("pending");
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");       // debounced
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);       // debounced
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -555,6 +555,15 @@ function Bookings({ a, slug, toast, onRefresh }) {
   const [sendingReviews, setSendingReviews] = useState(false);
   const [pendingPreArrival, setPendingPreArrival] = useState(0);
   const [sendingPreArrival, setSendingPreArrival] = useState(false);
+
+  // When navigated here from Conversations with a booking reference, apply it
+  useEffect(() => {
+    if (!initialSearch) return;
+    setSearchInput(initialSearch);
+    setSearch(initialSearch);
+    setFilter("");
+    onJumpConsumed?.();
+  }, [initialSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce search input 400 ms
   useEffect(() => {
@@ -1086,7 +1095,7 @@ function TransferRoutes({ a, slug, currency, toast }) {
 }
 
 // ── Conversations tab ─────────────────────────────────────────────────────────
-function Conversations({ a, slug, onChange }) {
+function Conversations({ a, slug, onChange, onViewBooking }) {
   const [list, setList] = useState(null);
   const [sel, setSel] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -1109,6 +1118,7 @@ function Conversations({ a, slug, onChange }) {
             <button className={`conv-item ${sel === c.id ? "is-sel" : ""}`} onClick={() => setSel(c.id)}>
               <span className="conv-meta">
                 {c.handoff_requested && <span className="status status-handoff">Needs staff</span>}
+                {c.booking_reference && <span className="conv-booking-ref">{c.booking_reference}</span>}
                 <span>{fmtDate(c.last_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                 <span>{c.messages} msgs</span>
               </span>
@@ -1122,6 +1132,17 @@ function Conversations({ a, slug, onChange }) {
         {sel && !detail && <div className="adm-loading">Loading transcript…</div>}
         {detail && (
           <>
+            {detail.booking_reference && (
+              <div className="conv-booking-bar">
+                <span>Booking created in this conversation:</span>
+                <strong>{detail.booking_reference}</strong>
+                {onViewBooking && (
+                  <button className="adm-btn adm-btn-ghost-sm" onClick={() => onViewBooking(detail.booking_reference)}>
+                    View booking →
+                  </button>
+                )}
+              </div>
+            )}
             {detail.handoff_requested && (
               <div className="handoff-bar">
                 <div>
@@ -1171,6 +1192,7 @@ const SR_STATUS_LABEL = { open: "Open", in_progress: "In progress", done: "Done"
 function ServiceRequests({ a, slug, toast, onRefresh }) {
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState("open");
+  const [editing, setEditing] = useState(null); // { ref, assigned_to, staff_notes }
 
   const load = useCallback(() => {
     setRows(null);
@@ -1180,10 +1202,19 @@ function ServiceRequests({ a, slug, toast, onRefresh }) {
 
   async function setStatus(ref, status) {
     try {
-      await a.setServiceRequest(slug, ref, status);
+      await a.setServiceRequest(slug, ref, { status });
       toast.success(`Request ${ref} marked ${SR_STATUS_LABEL[status]}`);
       load();
       onRefresh?.();
+    } catch (e) { toast.error(e.message); }
+  }
+
+  async function saveNotes(ref, assigned_to, staff_notes) {
+    try {
+      await a.setServiceRequest(slug, ref, { assigned_to, staff_notes });
+      toast.success("Notes saved");
+      setEditing(null);
+      load();
     } catch (e) { toast.error(e.message); }
   }
 
@@ -1212,41 +1243,73 @@ function ServiceRequests({ a, slug, toast, onRefresh }) {
         <div className="table-wrap">
           <table className="data">
             <thead>
-              <tr><th>Reference</th><th>Category</th><th>Guest</th><th>Request</th><th>Status</th><th>Time</th><th/></tr>
+              <tr><th>Reference</th><th>Category</th><th>Guest</th><th>Request</th><th>Assigned to</th><th>Status</th><th>Time</th><th/></tr>
             </thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.reference} className={r.status === "open" ? "row-pending" : ""}>
-                  <td className="ref">{r.reference}</td>
-                  <td>
-                    <span style={{
-                      display: "inline-block", padding: "2px 8px", borderRadius: 99,
-                      fontSize: "0.75rem", fontWeight: 600,
-                      background: `${SR_CATEGORY_COLOR[r.category]}22`,
-                      color: SR_CATEGORY_COLOR[r.category],
-                    }}>
-                      {SR_CATEGORY_LABEL[r.category] || r.category}
-                    </span>
-                  </td>
-                  <td>{r.guest_name || <span style={{color:"var(--muted)"}}>Unknown</span>}</td>
-                  <td style={{maxWidth: 260, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{r.details}</td>
-                  <td><Status value={r.status === "done" ? "confirmed" : r.status === "in_progress" ? "pending" : "pending"} />&nbsp;<small>{SR_STATUS_LABEL[r.status]}</small></td>
-                  <td style={{color:"var(--muted)",fontSize:"0.8rem"}}>{timeSinceISO(r.created_at)}</td>
-                  <td className="actions">
-                    {r.status === "open" && (
-                      <button className="adm-icon-btn adm-icon-btn-confirm" title="Mark in progress"
-                        onClick={() => setStatus(r.reference, "in_progress")}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <>
+                  <tr key={r.reference} className={r.status === "open" ? "row-pending" : ""}>
+                    <td className="ref">{r.reference}</td>
+                    <td>
+                      <span style={{
+                        display: "inline-block", padding: "2px 8px", borderRadius: 99,
+                        fontSize: "0.75rem", fontWeight: 600,
+                        background: `${SR_CATEGORY_COLOR[r.category]}22`,
+                        color: SR_CATEGORY_COLOR[r.category],
+                      }}>
+                        {SR_CATEGORY_LABEL[r.category] || r.category}
+                      </span>
+                    </td>
+                    <td>{r.guest_name || <span style={{color:"var(--muted)"}}>Unknown</span>}</td>
+                    <td style={{maxWidth: 220, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}} title={r.details}>{r.details}</td>
+                    <td style={{fontSize:"0.85rem"}}>
+                      {r.assigned_to || <span style={{color:"var(--muted)"}}>—</span>}
+                      {r.staff_notes && <small style={{display:"block",color:"var(--muted)",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={r.staff_notes}>{r.staff_notes}</small>}
+                    </td>
+                    <td><Status value={r.status === "done" ? "confirmed" : "pending"} />&nbsp;<small>{SR_STATUS_LABEL[r.status]}</small></td>
+                    <td style={{color:"var(--muted)",fontSize:"0.8rem"}}>{timeSinceISO(r.created_at)}</td>
+                    <td className="actions">
+                      <button className="adm-icon-btn" title="Edit assignment / notes"
+                        onClick={() => setEditing(editing?.ref === r.reference ? null : { ref: r.reference, assigned_to: r.assigned_to || "", staff_notes: r.staff_notes || "" })}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
-                    )}
-                    {r.status !== "done" && (
-                      <button className="adm-icon-btn adm-icon-btn-confirm" title="Mark done"
-                        onClick={() => setStatus(r.reference, "done")}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                      {r.status === "open" && (
+                        <button className="adm-icon-btn adm-icon-btn-confirm" title="Mark in progress"
+                          onClick={() => setStatus(r.reference, "in_progress")}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </button>
+                      )}
+                      {r.status !== "done" && (
+                        <button className="adm-icon-btn adm-icon-btn-confirm" title="Mark done"
+                          onClick={() => setStatus(r.reference, "done")}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {editing?.ref === r.reference && (
+                    <tr className="sr-notes-row">
+                      <td colSpan={8}>
+                        <div className="sr-notes-panel">
+                          <div className="adm-field" style={{marginBottom:0, flex:1}}>
+                            <label>Assigned to</label>
+                            <input type="text" placeholder="Staff member name…" value={editing.assigned_to}
+                              onChange={e => setEditing(ed => ({ ...ed, assigned_to: e.target.value }))} />
+                          </div>
+                          <div className="adm-field" style={{marginBottom:0, flex:2}}>
+                            <label>Staff notes</label>
+                            <input type="text" placeholder="Internal notes visible only to staff…" value={editing.staff_notes}
+                              onChange={e => setEditing(ed => ({ ...ed, staff_notes: e.target.value }))} />
+                          </div>
+                          <div style={{display:"flex",gap:8,alignSelf:"flex-end"}}>
+                            <button className="adm-btn adm-btn-primary" onClick={() => saveNotes(r.reference, editing.assigned_to, editing.staff_notes)}>Save</button>
+                            <button className="adm-btn adm-btn-ghost-sm" onClick={() => setEditing(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>
@@ -2252,6 +2315,14 @@ function PropertySettings({ a, slug, currency, toast }) {
                 </button>
               ))}
             </div>
+            {form.weekend_days.length > 0 ? (
+              <span className="adm-field-hint">
+                Weekend uplift applies on: {["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                  .filter((_, i) => form.weekend_days.includes(i)).join(", ")}
+              </span>
+            ) : (
+              <span className="adm-field-hint">No days selected — same rate every day.</span>
+            )}
           </div>
         </div>
       </div>
@@ -3602,6 +3673,7 @@ export default function Admin({ urlSlug = null }) {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [refreshing,  setRefreshing]  = useState(false);
   const [tick,        setTick]        = useState(0);   // drives timeSince re-render
+  const [bookingJump, setBookingJump] = useState("");  // navigate from conversations → bookings
   const toast = useToast();
 
   const authToken = isPropertyMode ? jwt : token;
@@ -3838,11 +3910,11 @@ export default function Admin({ urlSlug = null }) {
         <main className="admin-main" key={slug}>
           {!isPropertyMode && tab === "properties" && <SuperProperties token={token} toast={toast}/>}
           {slug && tab === "overview"      && <Overview      a={a} slug={slug} goTo={setTab}/>}
-          {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
+          {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges} initialSearch={bookingJump} onJumpConsumed={() => setBookingJump("")}/>}
           {slug && tab === "transfers"       && <Transfers       a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "transfer-routes" && <TransferRoutes  a={a} slug={slug} currency={currency} toast={toast}/>}
           {slug && tab === "experiences"    && <Experiences     a={a} slug={slug} currency={currency} toast={toast}/>}
-          {slug && tab === "conversations" && <Conversations   a={a} slug={slug} onChange={refreshBadges}/>}
+          {slug && tab === "conversations" && <Conversations   a={a} slug={slug} onChange={refreshBadges} onViewBooking={ref => { setBookingJump(ref); setTab("bookings"); }}/>}
           {slug && tab === "promos"        && <PromoCodes      a={a} slug={slug} toast={toast}/>}
           {slug && tab === "requests"      && <ServiceRequests a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "calendar"      && <CalendarView    a={a} slug={slug}/>}
