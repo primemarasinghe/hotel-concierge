@@ -2002,6 +2002,20 @@ _VOICE_TOOLS = [
         "description": "Show the guest a form to collect name, email, and phone. Call this after the guest selects a room.",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "type": "function",
+        "name": "prefill_guest_details",
+        "description": "Pre-fill the guest details form with name, email and phone you heard spoken. Call this as soon as the guest provides any of their details verbally — even partially. The form will be populated on screen so they can verify and correct anything.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name":  {"type": "string", "description": "Guest full name as heard"},
+                "email": {"type": "string", "description": "Guest email address as heard"},
+                "phone": {"type": "string", "description": "Guest phone number as heard"},
+            },
+            "required": ["name", "email", "phone"],
+        },
+    },
 ]
 
 
@@ -2035,9 +2049,9 @@ async def voice_realtime_ws(websocket: WebSocket, slug: str, db: Session = Depen
 VOICE SESSION RULES — you are speaking aloud, not texting. These override the text-chat rules above:
 1. Keep EVERY reply under 2 sentences. No bullet points, no lists, no markdown.
 2. After showing availability say: "You can tap Select on a room, or just tell me which one you'd like."
-3. After get_quote returns, a guest details form appears on screen automatically. Say only: "The form is on screen — fill it in or tell me your name, email and phone." Do NOT say "just fill in your details" without also having called get_quote first.
-4. NEVER ask the guest for name, email or phone in text — the form handles it. Only accept them if the guest volunteers the info verbally without prompting.
-5. When the guest says their name, email and phone aloud, read all three back and ask "Is that correct?" — wait for a clear yes before calling create_reservation.
+3. After get_quote returns, a guest details form appears on screen automatically. Say only: "The form is on screen — fill it in, or just tell me your name, email and phone number."
+4. When the guest provides their name, email and phone verbally: IMMEDIATELY call prefill_guest_details with what you heard. Then say: "I've filled in the form — check it and edit anything I got wrong, then tap Continue." Do NOT ask "Is that correct?" and do NOT call create_reservation until the guest taps Continue on the form.
+5. NEVER ask the guest to repeat their details — if you are unsure, still call prefill_guest_details with your best guess so they can correct it in the form.
 6. Never say "fill in your details below" — always say "the form is on screen".
 """
 
@@ -2101,6 +2115,8 @@ VOICE SESSION RULES — you are speaking aloud, not texting. These override the 
                                 print(f"[VOICE] email error: {mail_exc}")
                     elif name == "request_guest_details":
                         result = agent._request_guest_details()
+                    elif name == "prefill_guest_details":
+                        result = agent._prefill_guest_details(**args)
                     else:
                         result = {"error": f"Unknown tool: {name}"}
                 except Exception as exc:

@@ -266,6 +266,14 @@ class ConciergeAgent:
         self.events.append({"type": "guest_details_form"})
         return {"ok": True, "message": "Guest details form displayed. Wait for the guest to submit their name, email and phone before proceeding."}
 
+    def _prefill_guest_details(self, name: str = "", email: str = "", phone: str = ""):
+        """Called by voice agent when it hears the guest's details — pre-fills the on-screen form."""
+        self.events.append({"type": "guest_details_form"})   # ensure form is visible
+        self.events.append({"type": "guest_details_prefill", "data": {
+            "name": name.strip(), "email": email.strip(), "phone": phone.strip(),
+        }})
+        return {"ok": True, "message": "Form pre-filled. Tell the guest to check the form and edit anything that looks wrong, then tap Continue."}
+
     def _request_human(self, reason):
         self.conv.handoff_requested, self.conv.handoff_reason = True, reason
         self.db.commit()

@@ -91,12 +91,19 @@ function VoiceQuoteCard({ data, accent, onConfirm }) {
   );
 }
 
-function VoiceGuestForm({ accent, onSubmit }) {
-  const [name,  setName]  = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+function VoiceGuestForm({ accent, onSubmit, prefill = {} }) {
+  const [name,  setName]  = useState(prefill.name  || "");
+  const [email, setEmail] = useState(prefill.email || "");
+  const [phone, setPhone] = useState(prefill.phone || "");
   const [errs,  setErrs]  = useState({});
   const [done,  setDone]  = useState(false);
+
+  // Sync when new prefill data arrives (AI heard more details)
+  useEffect(() => {
+    if (prefill.name)  setName(prefill.name);
+    if (prefill.email) setEmail(prefill.email);
+    if (prefill.phone) setPhone(prefill.phone);
+  }, [prefill.name, prefill.email, prefill.phone]);
 
   function validate() {
     const e = {};
@@ -351,10 +358,23 @@ export default function VoiceAgent({ slug, onClose }) {
       case "agent.event": {
         const aev = ev.event;
         if (!aev) break;
-        if (aev.type === "availability_results")  setActiveCard({ type: "availability", data: aev.data });
-        else if (aev.type === "quote_result")     setActiveCard({ type: "quote",        data: aev.data });
-        else if (aev.type === "guest_details_form") setActiveCard({ type: "guest_form", data: {} });
-        else if (aev.type === "booking_created")  setActiveCard({ type: "booking_done", data: aev.data });
+        if (aev.type === "availability_results")
+          setActiveCard({ type: "availability", data: aev.data });
+        else if (aev.type === "quote_result")
+          setActiveCard({ type: "quote", data: aev.data });
+        else if (aev.type === "guest_details_form")
+          setActiveCard(prev =>
+            prev?.type === "guest_form"
+              ? prev  // already showing — don't reset prefill
+              : { type: "guest_form", data: { prefill: {} } }
+          );
+        else if (aev.type === "guest_details_prefill")
+          setActiveCard(prev => ({
+            type: "guest_form",
+            data: { prefill: aev.data },
+          }));
+        else if (aev.type === "booking_created")
+          setActiveCard({ type: "booking_done", data: aev.data });
         break;
       }
 
@@ -632,7 +652,11 @@ export default function VoiceAgent({ slug, onClose }) {
                 />
               )}
               {activeCard.type === "guest_form" && (
-                <VoiceGuestForm accent={accent} onSubmit={handleGuestSubmit} />
+                <VoiceGuestForm
+                  accent={accent}
+                  onSubmit={handleGuestSubmit}
+                  prefill={activeCard.data?.prefill || {}}
+                />
               )}
               {activeCard.type === "booking_done" && (
                 <VoiceBookingDone data={activeCard.data} accent={accent} />
