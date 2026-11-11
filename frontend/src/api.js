@@ -42,6 +42,8 @@ export const api = {
   auth: {
     login: (slug, email, password) =>
       request(`/api/auth/${slug}/login`, { method: "POST", body: { email, password } }),
+    refresh: (slug, token) =>
+      request(`/api/auth/${slug}/refresh`, { token, isJwt: true }),
     setCredentials: (slug, email, password, adminToken) =>
       request(`/api/admin/${slug}/set-credentials`, {
         method: "POST", body: { email, password }, token: adminToken,
@@ -49,8 +51,8 @@ export const api = {
   },
   admin: (token, isJwt = false) => ({
     summary: (slug) => request(`/api/admin/${slug}/summary`, { token, isJwt }),
-    bookings: (slug, status) =>
-      request(`/api/admin/${slug}/bookings${status ? `?status=${status}` : ""}`, { token, isJwt }),
+    bookings: (slug, status, page = 1, pageSize = 50) =>
+      request(`/api/admin/${slug}/bookings?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ""}`, { token, isJwt }),
     setBooking: (slug, ref, status) =>
       request(`/api/admin/${slug}/bookings/${ref}`, { method: "PATCH", body: { status }, token, isJwt }),
     transfers: (slug) => request(`/api/admin/${slug}/transfers`, { token, isJwt }),

@@ -1481,6 +1481,8 @@ a { color: var(--accent); }
 
 /* ── Bookings toolbar ── */
 .adm-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+.adm-pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; justify-content: center; }
+.adm-pagination-info { font-size: 0.85rem; color: var(--muted); }
 .adm-search {
   display: flex;
   align-items: center;

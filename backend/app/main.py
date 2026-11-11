@@ -490,6 +490,25 @@ def auth_login(request: Request, slug: str, body: LoginBody, db: Session = Depen
     return {"token": token, "slug": slug, "property": prop.name}
 
 
+@app.post("/api/auth/{slug}/refresh")
+def auth_refresh(slug: str, authorization: str = Header(default="")):
+    """Issue a new 24-hour token from a still-valid token (silent session extension)."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Bearer token required")
+    raw = authorization[7:]
+    try:
+        payload = pyjwt.decode(raw, settings.jwt_secret, algorithms=["HS256"])
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(401, "Session expired — please sign in again")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid token")
+    if payload.get("sub") != slug:
+        raise HTTPException(403, "Token not valid for this property")
+    new_payload = {"sub": slug, "exp": datetime.now(timezone.utc) + timedelta(hours=24)}
+    new_token = pyjwt.encode(new_payload, settings.jwt_secret, algorithm="HS256")
+    return {"token": new_token}
+
+
 # ---------------- super-admin (cross-property management) ----------------
 
 def require_super_admin(x_admin_token: str = Header(default="")):
@@ -697,14 +716,29 @@ def admin_summary(prop: Property = Depends(get_property), db: Session = Depends(
 
 
 @app.get("/api/admin/{slug}/bookings", dependencies=[admin])
-def admin_bookings(status: str | None = None, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+def admin_bookings(
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    prop: Property = Depends(get_property),
+    db: Session = Depends(get_db),
+):
+    page = max(1, page)
+    page_size = max(1, min(page_size, 200))
     q = select(Booking).where(Booking.property_id == prop.id)
     if status:
         q = q.where(Booking.status == status)
-    rows = db.scalars(q.order_by(Booking.check_in.desc()).limit(500)).all()
-    return [{**svc.booking_summary(b), "email": b.email, "phone": b.phone, "source": b.source,
-             "created_at": b.created_at.isoformat(), "review_email_sent": b.review_email_sent,
-             "pre_arrival_email_sent": b.pre_arrival_email_sent} for b in rows]
+    total = db.scalar(select(func.count()).select_from(q.subquery()))
+    rows = db.scalars(q.order_by(Booking.check_in.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": max(1, -(-total // page_size)),
+        "items": [{**svc.booking_summary(b), "email": b.email, "phone": b.phone, "source": b.source,
+                   "created_at": b.created_at.isoformat(), "review_email_sent": b.review_email_sent,
+                   "pre_arrival_email_sent": b.pre_arrival_email_sent} for b in rows],
+    }
 
 
 class StatusIn(BaseModel):
@@ -1821,8 +1855,12 @@ async def admin_kb_upload(
 ):
     if not file.filename:
         raise HTTPException(400, "No file provided")
-    data = await file.read()
-    if len(data) > 10 * 1024 * 1024:
+    # Reject before reading body when Content-Length is present
+    _MAX = 10 * 1024 * 1024
+    if file.size is not None and file.size > _MAX:
+        raise HTTPException(400, "File too large — maximum 10 MB")
+    data = await file.read(_MAX + 1)
+    if len(data) > _MAX:
         raise HTTPException(400, "File too large — maximum 10 MB")
     text = _extract_text(data, file.filename)
     if not text.strip():

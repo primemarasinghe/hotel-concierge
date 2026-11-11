@@ -546,6 +546,8 @@ function Bookings({ a, slug, toast, onRefresh }) {
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageInfo, setPageInfo] = useState({ total: 0, pages: 1 });
   const [pendingReviews, setPendingReviews] = useState(0);
   const [sendingReviews, setSendingReviews] = useState(false);
   const [pendingPreArrival, setPendingPreArrival] = useState(0);
@@ -553,9 +555,14 @@ function Bookings({ a, slug, toast, onRefresh }) {
 
   const load = useCallback(() => {
     setRows(null);
-    a.bookings(slug, filter).then(setRows).catch(() => setRows([]));
-  }, [a, slug, filter]);
+    a.bookings(slug, filter, page, 50)
+      .then(r => { setRows(r.items); setPageInfo({ total: r.total, pages: r.pages }); })
+      .catch(() => { setRows([]); setPageInfo({ total: 0, pages: 1 }); });
+  }, [a, slug, filter, page]);
   useEffect(() => { load(); }, [load]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => { setPage(1); }, [filter]);
 
   useEffect(() => {
     a.reviewsPending(slug).then(r => setPendingReviews(r.pending)).catch(() => {});
@@ -614,6 +621,7 @@ function Bookings({ a, slug, toast, onRefresh }) {
       b.room?.toLowerCase().includes(q)
     );
   }, [rows, search]);
+  const showPagination = pageInfo.pages > 1;
 
   return (
     <>
@@ -780,6 +788,14 @@ function Bookings({ a, slug, toast, onRefresh }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showPagination && (
+        <div className="adm-pagination">
+          <button className="adm-btn adm-btn-ghost-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+          <span className="adm-pagination-info">Page {page} of {pageInfo.pages} · {pageInfo.total} bookings</span>
+          <button className="adm-btn adm-btn-ghost-sm" disabled={page >= pageInfo.pages} onClick={() => setPage(p => p + 1)}>Next →</button>
         </div>
       )}
     </>
@@ -3612,6 +3628,30 @@ export default function Admin({ urlSlug = null }) {
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, [authToken, slug, refreshBadges]);
+
+  // Silently refresh JWT when it has less than 2 hours remaining
+  useEffect(() => {
+    if (!isPropertyMode || !jwt || !urlSlug) return;
+    async function maybeRefresh() {
+      try {
+        const parts = jwt.split(".");
+        if (parts.length !== 3) return;
+        const { exp } = JSON.parse(atob(parts[1]));
+        const secsLeft = exp - Math.floor(Date.now() / 1000);
+        if (secsLeft > 7200) return; // more than 2 hrs left — no need
+        const result = await api.auth.refresh(urlSlug, jwt);
+        store.set(JWT_KEY, result.token);
+        setJwt(result.token);
+      } catch (err) {
+        if (err.status === 401) { clearAuth(); setLoginErr("Session expired. Please sign in again."); }
+      }
+    }
+    maybeRefresh();
+    const onVis = () => { if (!document.hidden) maybeRefresh(); };
+    document.addEventListener("visibilitychange", onVis);
+    const id = setInterval(maybeRefresh, 30 * 60 * 1000); // check every 30 min
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+  }, [isPropertyMode, jwt, urlSlug, JWT_KEY, clearAuth]);
 
   // Tick every 15 s so timeSince() text stays fresh
   useEffect(() => {
