@@ -2035,9 +2035,10 @@ async def voice_realtime_ws(websocket: WebSocket, slug: str, db: Session = Depen
 VOICE SESSION RULES — you are speaking aloud, not texting. These override the text-chat rules above:
 1. Keep EVERY reply under 2 sentences. No bullet points, no lists, no markdown.
 2. After showing availability say: "You can tap Select on a room, or just tell me which one you'd like."
-3. After the guest selects a room say: "Great! You can fill in the form on screen, or just tell me your name, email and phone number."
-4. When the guest says their name, email and phone aloud, read all three back and ask "Is that correct?" — wait for a clear yes before calling create_reservation.
-5. Never say "fill in your details below" — always say "fill in the form on screen, or tell me your details."
+3. After get_quote returns, a guest details form appears on screen automatically. Say only: "The form is on screen — fill it in or tell me your name, email and phone." Do NOT say "just fill in your details" without also having called get_quote first.
+4. NEVER ask the guest for name, email or phone in text — the form handles it. Only accept them if the guest volunteers the info verbally without prompting.
+5. When the guest says their name, email and phone aloud, read all three back and ask "Is that correct?" — wait for a clear yes before calling create_reservation.
+6. Never say "fill in your details below" — always say "the form is on screen".
 """
 
     oai_url = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
@@ -2073,6 +2074,10 @@ VOICE SESSION RULES — you are speaking aloud, not texting. These override the 
                         result = agent._check_availability(**args)
                     elif name == "get_quote":
                         result = agent._get_quote(**args)
+                        # Always show the guest details form after a quote — don't rely on the AI
+                        # calling request_guest_details separately (it often forgets in voice mode).
+                        if "error" not in result:
+                            agent.events.append({"type": "guest_details_form"})
                     elif name == "create_reservation":
                         result = agent._create_reservation(**{**args, "guest_confirmed": args.get("guest_confirmed", True)})
                         # Send booking-received email to guest + staff alert (same as HTTP chat endpoint)
