@@ -1483,6 +1483,9 @@ a { color: var(--accent); }
 .adm-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
 .adm-pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; justify-content: center; }
 .adm-pagination-info { font-size: 0.85rem; color: var(--muted); }
+.adm-date-filter { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; color: var(--muted); }
+.adm-date-filter input[type="date"] { font-size: 0.82rem; border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.adm-date-filter input[type="date"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .adm-search {
   display: flex;
   align-items: center;

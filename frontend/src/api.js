@@ -51,8 +51,14 @@ export const api = {
   },
   admin: (token, isJwt = false) => ({
     summary: (slug) => request(`/api/admin/${slug}/summary`, { token, isJwt }),
-    bookings: (slug, status, page = 1, pageSize = 50) =>
-      request(`/api/admin/${slug}/bookings?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ""}`, { token, isJwt }),
+    bookings: (slug, { status, search, dateFrom, dateTo, page = 1, pageSize = 50 } = {}) => {
+      const p = new URLSearchParams({ page, page_size: pageSize });
+      if (status)   p.set("status",    status);
+      if (search)   p.set("search",    search.trim());
+      if (dateFrom) p.set("date_from", dateFrom);
+      if (dateTo)   p.set("date_to",   dateTo);
+      return request(`/api/admin/${slug}/bookings?${p}`, { token, isJwt });
+    },
     setBooking: (slug, ref, status) =>
       request(`/api/admin/${slug}/bookings/${ref}`, { method: "PATCH", body: { status }, token, isJwt }),
     transfers: (slug) => request(`/api/admin/${slug}/transfers`, { token, isJwt }),

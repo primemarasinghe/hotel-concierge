@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from . import email_service as em
@@ -718,6 +718,9 @@ def admin_summary(prop: Property = Depends(get_property), db: Session = Depends(
 @app.get("/api/admin/{slug}/bookings", dependencies=[admin])
 def admin_bookings(
     status: str | None = None,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     page: int = 1,
     page_size: int = 50,
     prop: Property = Depends(get_property),
@@ -728,6 +731,17 @@ def admin_bookings(
     q = select(Booking).where(Booking.property_id == prop.id)
     if status:
         q = q.where(Booking.status == status)
+    if search:
+        term = f"%{search.strip()}%"
+        q = q.where(or_(
+            Booking.guest_name.ilike(term),
+            Booking.email.ilike(term),
+            Booking.reference.ilike(term),
+        ))
+    if date_from:
+        q = q.where(Booking.check_in >= date_from)
+    if date_to:
+        q = q.where(Booking.check_in <= date_to)
     total = db.scalar(select(func.count()).select_from(q.subquery()))
     rows = db.scalars(q.order_by(Booking.check_in.desc()).offset((page - 1) * page_size).limit(page_size)).all()
     return {

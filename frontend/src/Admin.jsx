@@ -545,7 +545,10 @@ function downloadCSV(content, filename) {
 function Bookings({ a, slug, toast, onRefresh }) {
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState("pending");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");       // debounced
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [pageInfo, setPageInfo] = useState({ total: 0, pages: 1 });
   const [pendingReviews, setPendingReviews] = useState(0);
@@ -553,16 +556,25 @@ function Bookings({ a, slug, toast, onRefresh }) {
   const [pendingPreArrival, setPendingPreArrival] = useState(0);
   const [sendingPreArrival, setSendingPreArrival] = useState(false);
 
+  // Debounce search input 400 ms
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
   const load = useCallback(() => {
     setRows(null);
-    a.bookings(slug, filter, page, 50)
+    a.bookings(slug, { status: filter, search, dateFrom, dateTo, page, pageSize: 50 })
       .then(r => { setRows(r.items); setPageInfo({ total: r.total, pages: r.pages }); })
       .catch(() => { setRows([]); setPageInfo({ total: 0, pages: 1 }); });
-  }, [a, slug, filter, page]);
+  }, [a, slug, filter, search, dateFrom, dateTo, page]);
   useEffect(() => { load(); }, [load]);
 
-  // Reset to page 1 when filter changes
-  useEffect(() => { setPage(1); }, [filter]);
+  // Reset to page 1 when any filter changes
+  useEffect(() => { setPage(1); }, [filter, search, dateFrom, dateTo]);
+
+  const hasDateFilter = dateFrom || dateTo;
+  function clearDates() { setDateFrom(""); setDateTo(""); }
 
   useEffect(() => {
     a.reviewsPending(slug).then(r => setPendingReviews(r.pending)).catch(() => {});
@@ -610,17 +622,7 @@ function Bookings({ a, slug, toast, onRefresh }) {
   }
 
   const pending = useMemo(() => (rows || []).filter(b => b.status === "pending"), [rows]);
-  const filtered = useMemo(() => {
-    if (!rows) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(b =>
-      b.guest_name?.toLowerCase().includes(q) ||
-      b.email?.toLowerCase().includes(q) ||
-      b.reference?.toLowerCase().includes(q) ||
-      b.room?.toLowerCase().includes(q)
-    );
-  }, [rows, search]);
+  const filtered = rows || [];
   const showPagination = pageInfo.pages > 1;
 
   return (
@@ -660,10 +662,23 @@ function Bookings({ a, slug, toast, onRefresh }) {
           <input
             type="search"
             placeholder="Name, email or reference…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
           />
         </label>
+        <label className="adm-date-filter">
+          <span>From</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} max={dateTo || undefined} />
+        </label>
+        <label className="adm-date-filter">
+          <span>To</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} min={dateFrom || undefined} />
+        </label>
+        {hasDateFilter && (
+          <button className="adm-btn adm-btn-ghost-sm" onClick={clearDates} title="Clear date filter">
+            Clear dates
+          </button>
+        )}
         {pendingPreArrival > 0 && (
           <button className="adm-btn adm-btn-ghost-sm" onClick={sendPreArrivalEmails} disabled={sendingPreArrival}
             title={`Send pre-arrival emails to ${pendingPreArrival} guest${pendingPreArrival !== 1 ? "s" : ""} arriving in 48 hours`}>
@@ -720,7 +735,7 @@ function Bookings({ a, slug, toast, onRefresh }) {
         <div className="adm-loading">Loading bookings…</div>
       ) : filtered.length === 0 ? (
         <p className="empty">
-          {search ? `No bookings match "${search}".` : "No bookings in this category. New chat reservations arrive here as Awaiting confirmation."}
+          {(search || hasDateFilter) ? "No bookings match the current filters." : "No bookings in this category. New chat reservations arrive here as Awaiting confirmation."}
         </p>
       ) : (
         <div className="table-wrap">
