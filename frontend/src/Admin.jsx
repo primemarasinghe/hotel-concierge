@@ -157,88 +157,85 @@ const ICONS = {
   transfers:  "M1 3h15v13H1zM16 8l4 4-4 4M5.5 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12.5 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
   handoffs:   "M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13.09a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.26 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.37a16 16 0 0 0 6.72 6.72l1.73-1.73a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z",
 };
-function StatCard({ iconKey, value, label, action, onClick, urgent }) {
-  const clickable = onClick && value > 0;
+function StatCard({ iconKey, value, label, action, onClick, urgent, color = "blue" }) {
+  const clickable = !!onClick;
   return (
-    <div className={`stat-card${urgent ? " stat-card-urgent" : ""}${clickable ? " stat-card-link-wrap" : ""}`}>
-      <div className="stat-card-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <div
+      className={`stat-card stat-${color}${urgent ? " stat-card-urgent" : ""}${clickable ? " stat-card-clickable" : ""}`}
+      onClick={clickable ? onClick : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? e => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+    >
+      <div className="stat-card-deco" aria-hidden="true">
+        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d={ICONS[iconKey]}/>
         </svg>
       </div>
-      <div className="stat-card-body">
-        <div className="stat-card-n">{value}</div>
-        <div className="stat-card-l">{label}</div>
-        {action && value > 0 && (
-          <button className="stat-card-action" onClick={onClick}>{action} →</button>
-        )}
+      <div className="stat-card-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={ICONS[iconKey]}/>
+        </svg>
       </div>
+      <div className="stat-card-n">{value}</div>
+      <div className="stat-card-l">{label}</div>
+      {action && value > 0 && (
+        <div className="stat-card-action">{action} →</div>
+      )}
     </div>
   );
 }
 
 // ── Occupancy chart ───────────────────────────────────────────────────────────
+function occBarColor(pct) {
+  if (pct >= 80) return "#EF4444";
+  if (pct >= 60) return "#F59E0B";
+  if (pct >= 25) return "#3B82F6";
+  return "#CBD5E1";
+}
+
 function Occupancy({ days }) {
   const [hover, setHover] = useState(null);
   const total = days[0]?.total || 1;
+  const todayStr = new Date().toISOString().slice(0, 10);
   return (
     <figure className="occ">
-      <figcaption>
-        <strong>Occupancy forecast — next 14 nights</strong>
-        <span>{total} total units</span>
-      </figcaption>
       <div className="occ-plot" onMouseLeave={() => setHover(null)}>
-        {[100, 50].map(g => (
+        {[75, 50, 25].map(g => (
           <div key={g} className="occ-grid" style={{ bottom: `${g}%` }}>
-            <span>{Math.round((total * g) / 100)}</span>
+            <span>{g}%</span>
           </div>
         ))}
         {days.map((d, i) => {
           const pct = (d.occupied / total) * 100;
+          const isToday = d.date === todayStr;
           return (
             <button
               key={d.date}
-              className="occ-col"
+              className={`occ-col${isToday ? " occ-col-today" : ""}`}
               onMouseEnter={() => setHover(i)}
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
-              aria-label={`${fmtDate(d.date)}: ${d.occupied} of ${d.total} occupied`}
+              aria-label={`${fmtDate(d.date)}: ${d.occupied} of ${d.total} occupied (${Math.round(pct)}%)`}
             >
               <span
                 className="occ-bar"
                 style={{
-                  height: `${Math.max(pct, d.occupied ? 3 : 0)}%`,
-                  opacity: pct > 75 ? 1 : pct > 45 ? 0.78 : 0.55,
+                  height: `${Math.max(pct, d.occupied ? 4 : 0)}%`,
+                  background: occBarColor(pct),
                 }}
               />
-              <span className="occ-x">{fmtDate(d.date, { day: "numeric" })}</span>
+              <span className="occ-x">{isToday ? "●" : fmtDate(d.date, { day: "numeric" })}</span>
               {hover === i && (
                 <span className="occ-tip" role="tooltip">
-                  {fmtDate(d.date, { weekday: "short", day: "numeric", month: "short" })}
-                  <b>{d.occupied}/{d.total} · {Math.round(pct)}%</b>
+                  <span>{fmtDate(d.date, { weekday: "short", day: "numeric", month: "short" })}</span>
+                  <b>{d.occupied}/{d.total} rooms · {Math.round(pct)}%</b>
                 </span>
               )}
             </button>
           );
         })}
       </div>
-      <details className="occ-table">
-        <summary>Show as table</summary>
-        <table>
-          <thead>
-            <tr><th>Night of</th><th>Occupied</th><th>Available</th></tr>
-          </thead>
-          <tbody>
-            {days.map(d => (
-              <tr key={d.date}>
-                <td>{fmtDate(d.date, { weekday: "short", day: "numeric", month: "short" })}</td>
-                <td className="num">{d.occupied}</td>
-                <td className="num">{d.total - d.occupied}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
     </figure>
   );
 }
@@ -248,37 +245,77 @@ function RevenueForecast({ days, currency }) {
   const [hover, setHover] = useState(null);
   const max = Math.max(...days.map(d => d.revenue), 1);
   const hasAny = days.some(d => d.revenue > 0);
+  const totalRevenue = days.reduce((s, d) => s + d.revenue, 0);
+  const totalBookings = days.reduce((s, d) => s + (d.bookings || 0), 0);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  function isWeekend(iso) {
+    const dow = new Date(iso + "T00:00:00").getDay();
+    return dow === 0 || dow === 6;
+  }
+
   return (
     <figure className="rev-chart">
-      <figcaption>
-        <strong>Revenue forecast — next 14 days</strong>
-        <span>confirmed + pending check-ins</span>
-      </figcaption>
+      <div className="rfc-header">
+        <div className="rfc-header-left">
+          <span className="rfc-title">14-Day Revenue Forecast</span>
+          <span className="rfc-sub">confirmed + pending check-ins</span>
+        </div>
+        {hasAny && (
+          <div className="rfc-summary">
+            <div className="rfc-summary-item">
+              <span className="rfc-summary-val">{money(totalRevenue, currency)}</span>
+              <span className="rfc-summary-label">forecast total</span>
+            </div>
+            <div className="rfc-summary-divider" />
+            <div className="rfc-summary-item">
+              <span className="rfc-summary-val">{totalBookings}</span>
+              <span className="rfc-summary-label">booking{totalBookings !== 1 ? "s" : ""}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {!hasAny ? (
-        <p className="rev-empty">No confirmed or pending check-ins in the next 14 days.</p>
+        <div className="rfc-empty">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18M7 16l4-4 4 4 4-4"/>
+          </svg>
+          <div>
+            <p className="rfc-empty-title">No upcoming revenue</p>
+            <p className="rfc-empty-sub">No confirmed or pending check-ins in the next 14 days.</p>
+          </div>
+        </div>
       ) : (
-        <div className="rev-plot" onMouseLeave={() => setHover(null)}>
+        <div className="rev-plot rev-plot-forecast" onMouseLeave={() => setHover(null)}>
+          {[75, 50, 25].map(g => (
+            <div key={g} className="rev-grid" style={{ bottom: `${g}%` }} aria-hidden="true" />
+          ))}
           {days.map((d, i) => {
             const pct = (d.revenue / max) * 100;
+            const isToday = d.date === todayStr;
+            const weekend = isWeekend(d.date);
+            const dayAbbr = fmtDate(d.date, { weekday: "short" }).slice(0, 2);
+            const dayNum  = fmtDate(d.date, { day: "numeric" });
             return (
               <button
                 key={d.date}
-                className="rev-col"
+                className={`rev-col${isToday ? " rev-col-today" : ""}${weekend ? " rev-col-weekend" : ""}`}
                 onMouseEnter={() => setHover(i)}
                 onFocus={() => setHover(i)}
                 onBlur={() => setHover(null)}
-                aria-label={`${fmtDate(d.date)}: ${money(d.revenue, currency)}`}
+                aria-label={`${fmtDate(d.date, { weekday: "long", day: "numeric", month: "short" })}: ${money(d.revenue, currency)}`}
               >
-                <span
-                  className="rev-bar"
-                  style={{ height: `${Math.max(pct, d.revenue ? 4 : 0)}%` }}
-                />
-                <span className="rev-x">{fmtDate(d.date, { day: "numeric" })}</span>
-                {hover === i && d.revenue > 0 && (
+                <span className="rev-bar" style={{ height: `${Math.max(pct, d.revenue ? 4 : 0)}%` }} />
+                <span className="rev-x">
+                  <span className="rev-x-day">{dayAbbr}</span>
+                  <span className="rev-x-num">{dayNum}</span>
+                </span>
+                {hover === i && (
                   <span className="rev-tip" role="tooltip">
-                    {fmtDate(d.date, { weekday: "short", day: "numeric", month: "short" })}
-                    <b>{money(d.revenue, currency)}</b>
-                    <small>{d.bookings} booking{d.bookings !== 1 ? "s" : ""}</small>
+                    <span>{fmtDate(d.date, { weekday: "short", day: "numeric", month: "short" })}</span>
+                    <b>{d.revenue > 0 ? money(d.revenue, currency) : "No revenue"}</b>
+                    {d.bookings > 0 && <small>{d.bookings} booking{d.bookings !== 1 ? "s" : ""}</small>}
                   </span>
                 )}
               </button>
@@ -296,30 +333,30 @@ function RevenueTrend({ months, currency }) {
   const max = Math.max(...months.map(m => m.revenue), 1);
   return (
     <figure className="rev-chart">
-      <figcaption>
-        <strong>Revenue trend — last 6 months</strong>
+      <div className="rev-chart-header">
+        <strong>6-Month Revenue Trend</strong>
         <span>confirmed bookings by check-in month</span>
-      </figcaption>
-      <div className="rev-plot" onMouseLeave={() => setHover(null)}>
+      </div>
+      <div className="rev-plot rev-plot-6" onMouseLeave={() => setHover(null)}>
+        {[75, 50, 25].map(g => (
+          <div key={g} className="rev-grid" style={{ bottom: `${g}%` }} aria-hidden="true" />
+        ))}
         {months.map((m, i) => {
           const pct = (m.revenue / max) * 100;
           return (
             <button
               key={m.month_full}
-              className="rev-col"
+              className={`rev-col${m.is_current ? " rev-col-current" : ""}`}
               onMouseEnter={() => setHover(i)}
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
               aria-label={`${m.month_full}: ${money(m.revenue, currency)}`}
             >
-              <span className="rev-bar" style={{
-                height: `${Math.max(pct, m.revenue ? 4 : 0)}%`,
-                opacity: m.is_current ? 1 : 0.65,
-              }}/>
-              <span className="rev-x" style={{ fontWeight: m.is_current ? 700 : 400 }}>{m.month}</span>
+              <span className="rev-bar" style={{ height: `${Math.max(pct, m.revenue ? 4 : 0)}%` }} />
+              <span className="rev-x">{m.month}</span>
               {hover === i && m.revenue > 0 && (
                 <span className="rev-tip" role="tooltip">
-                  {m.month_full}
+                  <span>{m.month_full}</span>
                   <b>{money(m.revenue, currency)}</b>
                 </span>
               )}
@@ -350,86 +387,126 @@ function Overview({ a, slug, goTo }) {
       {/* ── Page header ── */}
       <div className="overview-head">
         <div className="overview-head-left">
-          <h2 className="overview-title">Today</h2>
           <p className="overview-date">{dateLabel}</p>
+          <h2 className="overview-title">Today's Overview</h2>
         </div>
-        <div className="overview-head-right">
+        {urgentCount > 0 && (
+          <div className="overview-alert-pill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/>
+            </svg>
+            <span>{urgentCount} action{urgentCount !== 1 ? "s" : ""} needed</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── At a Glance ── */}
+      <section className="overview-section">
+        <h3 className="overview-section-label">At a Glance</h3>
+        <div className="ov-glance-grid">
+          <StatCard color="blue"   iconKey="arrivals"   value={s.arrivals_today}  label="Arriving today" />
+          <StatCard color="violet" iconKey="departures" value={s.departures_today} label="Departing today" />
+          <StatCard color="green"  iconKey="inhouse"    value={s.in_house}         label="Staying tonight" />
           {totalUnits > 0 && (
-            <div className="overview-occ-pill">
-              <span className="overview-occ-pct">{occPct}%</span>
-              <span className="overview-occ-sub">occupied · {s.in_house}/{totalUnits} rooms</span>
+            <div className="stat-card stat-teal">
+              <div className="stat-card-deco" aria-hidden="true">
+                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 3v18h18M7 16l4-4 4 4 4-4"/>
+                </svg>
+              </div>
+              <div className="stat-card-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 3v18h18M7 16l4-4 4 4 4-4"/>
+                </svg>
+              </div>
+              <div className="stat-card-n">{occPct}%</div>
+              <div className="stat-card-l">Occupancy tonight · {s.in_house}/{totalUnits} rooms</div>
+              <div className="stat-occ-bar-wrap" aria-hidden="true">
+                <div className="stat-occ-bar" style={{ width: `${occPct}%` }} />
+              </div>
             </div>
           )}
-          {urgentCount > 0 && (
-            <div className="overview-alert-pill">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01"/></svg>
-              <span>{urgentCount} action{urgentCount !== 1 ? "s" : ""} needed</span>
+        </div>
+      </section>
+
+      {/* ── Needs Attention ── */}
+      {(s.pending > 0 || s.transfers_48h > 0 || s.open_handoffs > 0 || s.open_service_requests > 0) && (
+        <section className="overview-section">
+          <h3 className="overview-section-label overview-section-label--alert">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/>
+            </svg>
+            Needs Attention
+          </h3>
+          <div className="ov-action-grid">
+            {s.pending > 0 && <StatCard color="amber" iconKey="pending"    value={s.pending}               label="Pending confirmations"  action="Confirm now" onClick={() => goTo("bookings")}       urgent />}
+            {s.transfers_48h > 0 && <StatCard color="sky" iconKey="transfers" value={s.transfers_48h}      label="Transfers in 48 h"       action="Review"      onClick={() => goTo("transfers")} />}
+            {s.open_handoffs > 0 && <StatCard color="rose" iconKey="handoffs" value={s.open_handoffs}      label="Guests needing staff"    action="View"        onClick={() => goTo("conversations")} urgent />}
+            {s.open_service_requests > 0 && <StatCard color="orange" iconKey="handoffs" value={s.open_service_requests} label="Open service requests" action="View" onClick={() => goTo("requests")} urgent />}
+          </div>
+        </section>
+      )}
+
+      {/* ── Charts row: Occupancy (left) + Revenue KPIs (right) ── */}
+      <div className="ov-charts-row">
+        <div className="ov-chart-card ov-chart-card--fill">
+          <div className="ov-chart-card-head">
+            <span className="ov-chart-card-title">14-Day Occupancy Forecast</span>
+            <div className="occ-legend">
+              {[["#3B82F6","Normal"],["#F59E0B","High"],["#EF4444","Full"]].map(([c,l]) => (
+                <span key={l} className="occ-legend-item">
+                  <span className="occ-legend-dot" style={{ background: c }} />
+                  {l}
+                </span>
+              ))}
             </div>
-          )}
+          </div>
+          <Occupancy days={s.occupancy} />
+        </div>
+
+        <div className="ov-chart-card">
+          <div className="ov-chart-card-head">
+            <span className="ov-chart-card-title">Revenue Performance</span>
+            <span className="ov-chart-card-sub">month-to-date</span>
+          </div>
+          <div className="rev-kpis">
+            <div className="rev-kpi rev-kpi-hero">
+              <span className="rev-kpi-label">This Month</span>
+              <span className="rev-kpi-value">{money(s.revenue_mtd, s.currency)}</span>
+              <span className="rev-kpi-sub">confirmed check-ins</span>
+            </div>
+            <div className="rev-kpi">
+              <span className="rev-kpi-label">Next 30 Days</span>
+              <span className="rev-kpi-value">{money(s.revenue_next30, s.currency)}</span>
+              <span className="rev-kpi-sub">confirmed + pending</span>
+            </div>
+            <div className="rev-kpi">
+              <span className="rev-kpi-label">ADR</span>
+              <span className="rev-kpi-value">{money(s.adr_mtd, s.currency)}</span>
+              <span className="rev-kpi-sub">avg daily rate (MTD)</span>
+            </div>
+            <div className="rev-kpi">
+              <span className="rev-kpi-label">RevPAR</span>
+              <span className="rev-kpi-value">{money(s.revpar_mtd, s.currency)}</span>
+              <span className="rev-kpi-sub">rev per available room</span>
+            </div>
+            <div className="rev-kpi">
+              <span className="rev-kpi-label">Occupancy</span>
+              <span className="rev-kpi-value">{s.occupancy_pct_mtd ?? 0}%</span>
+              <span className="rev-kpi-sub">room nights sold (MTD)</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── Activity section ── */}
-      <section className="overview-section">
-        <h3 className="overview-section-label">Today's Activity</h3>
-        <div className="stat-grid">
-          <StatCard iconKey="arrivals"   value={s.arrivals_today}   label="Arriving today" />
-          <StatCard iconKey="departures" value={s.departures_today}  label="Leaving today" />
-          <StatCard iconKey="inhouse"    value={s.in_house}          label="Staying tonight" />
-          <StatCard iconKey="pending"    value={s.pending}           label="Awaiting confirmation" action="Confirm now" onClick={() => goTo("bookings")}      urgent={s.pending > 0} />
-          <StatCard iconKey="transfers"  value={s.transfers_48h}     label="Transfers in 48 h"     action="Review"      onClick={() => goTo("transfers")} />
-          <StatCard iconKey="handoffs"   value={s.open_handoffs}     label="Guests needing staff"  action="View"        onClick={() => goTo("conversations")} urgent={s.open_handoffs > 0} />
-          {s.open_service_requests > 0 && (
-            <StatCard iconKey="handoffs" value={s.open_service_requests} label="Open service requests" action="View" onClick={() => goTo("requests")} urgent />
-          )}
-        </div>
-      </section>
-
-      {/* ── Occupancy section ── */}
-      <section className="overview-section">
-        <h3 className="overview-section-label">Occupancy Forecast</h3>
-        <Occupancy days={s.occupancy} />
-      </section>
-
-      {/* ── Revenue section ── */}
-      <section className="overview-section">
-        <div className="overview-section-head-row">
-          <h3 className="overview-section-label">Revenue</h3>
-          <span className="overview-section-sub">month-to-date · confirmed bookings</span>
-        </div>
-        <div className="rev-kpis">
-          <div className="rev-kpi">
-            <span className="rev-kpi-label">This month</span>
-            <span className="rev-kpi-value">{money(s.revenue_mtd, s.currency)}</span>
-            <span className="rev-kpi-sub">confirmed check-ins</span>
-          </div>
-          <div className="rev-kpi">
-            <span className="rev-kpi-label">Next 30 days</span>
-            <span className="rev-kpi-value">{money(s.revenue_next30, s.currency)}</span>
-            <span className="rev-kpi-sub">confirmed + pending</span>
-          </div>
-          <div className="rev-kpi">
-            <span className="rev-kpi-label">ADR (MTD)</span>
-            <span className="rev-kpi-value">{money(s.adr_mtd, s.currency)}</span>
-            <span className="rev-kpi-sub">avg daily rate</span>
-          </div>
-          <div className="rev-kpi">
-            <span className="rev-kpi-label">RevPAR (MTD)</span>
-            <span className="rev-kpi-value">{money(s.revpar_mtd, s.currency)}</span>
-            <span className="rev-kpi-sub">rev per available room</span>
-          </div>
-          <div className="rev-kpi">
-            <span className="rev-kpi-label">Occupancy (MTD)</span>
-            <span className="rev-kpi-value">{s.occupancy_pct_mtd ?? 0}%</span>
-            <span className="rev-kpi-sub">room nights sold</span>
-          </div>
-        </div>
+      {/* ── Revenue trend / forecast chart ── */}
+      <div className="ov-chart-card ov-chart-card--wide">
         {s.revenue_trend && s.revenue_trend.some(m => m.revenue > 0) ? (
           <RevenueTrend months={s.revenue_trend} currency={s.currency} />
         ) : (
           <RevenueForecast days={s.revenue_forecast} currency={s.currency} />
         )}
-      </section>
+      </div>
 
     </div>
   );
@@ -2694,10 +2771,13 @@ function Rooms({ a, slug, toast, currency }) {
   return (
     <>
       <div className="adm-toolbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>Rooms &amp; Pricing</span>
-          {rows && <span className="badge badge-blue">{rows.length} room type{rows.length !== 1 ? "s" : ""}</span>}
-          {rows && <span style={{ fontSize: "0.78rem", opacity: 0.55 }}>{rows.reduce((s, r) => s + r.total_units, 0)} total units</span>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: "1rem", fontWeight: 700, color: "var(--adm-ink,#0F172A)" }}>Rooms &amp; Pricing</span>
+          {rows && (
+            <span style={{ fontSize: "0.78rem", color: "var(--adm-muted,#64748B)" }}>
+              {rows.length} room type{rows.length !== 1 ? "s" : ""} &middot; {rows.reduce((s, r) => s + r.total_units, 0)} total units
+            </span>
+          )}
         </div>
         <button className="adm-btn adm-btn-primary" style={{ marginLeft: "auto" }}
           onClick={() => editing && !editing.id ? setEditing(null) : setEditing({ ...EMPTY_ROOM })}>
@@ -2719,54 +2799,59 @@ function Rooms({ a, slug, toast, currency }) {
       ) : (
         <div className="room-list">
           {rows.map(row => (
-            <div key={row.id}>
-              {editing?.id === row.id ? (
-                <div className="room-card room-card-editing">
-                  <RoomForm initial={toForm(row)} onSave={handleSave} onCancel={() => setEditing(null)} saving={saving} currency={currency} />
-                </div>
-              ) : (
-                <div className="room-card">
-                  {row.image_url && (
-                    <div className="room-card-img-wrap">
-                      <img src={row.image_url} alt={row.name} className="room-card-img"
-                        onError={e => { e.target.parentElement.style.display = "none"; }} />
+            editing?.id === row.id ? (
+              <div key={row.id} className="room-card room-card-editing">
+                <RoomForm initial={toForm(row)} onSave={handleSave} onCancel={() => setEditing(null)} saving={saving} currency={currency} />
+              </div>
+            ) : (
+              <div key={row.id} className="room-card">
+                <div className="room-card-img-wrap">
+                  {row.image_url ? (
+                    <img src={row.image_url} alt={row.name} className="room-card-img"
+                      onError={e => { e.target.parentElement.style.display = "none"; }} />
+                  ) : (
+                    <div className="room-card-img-placeholder">
+                      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 22V8l9-6 9 6v14M9 22V12h6v10"/>
+                      </svg>
                     </div>
                   )}
-                  <div className="room-card-body">
-                    <div className="room-card-header">
-                      <div className="room-card-title-row">
-                        <span className="room-card-code">{row.code}</span>
-                        <h3 className="room-card-name">{row.name}</h3>
-                      </div>
-                      <div className="kb-chunk-actions">
-                        <button className="adm-btn adm-btn-sm" onClick={() => setEditing(toForm(row))}>Edit</button>
-                        <button className="adm-btn adm-btn-sm adm-btn-danger"
-                          disabled={deleting === row.id}
-                          onClick={() => handleDelete(row.id, row.name)}>
-                          {deleting === row.id ? "…" : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="room-card-meta">
-                      <span>{row.beds}</span>
-                      {row.size_sqm && <span>{row.size_sqm} m²</span>}
-                      <span>Up to {row.max_adults} adult{row.max_adults !== 1 ? "s" : ""}{row.max_children > 0 ? ` + ${row.max_children} children` : ""}</span>
-                      <span className="room-card-units">{row.total_units} unit{row.total_units !== 1 ? "s" : ""}</span>
-                    </div>
-                    {row.description && <p className="room-card-desc">{row.description}</p>}
-                    {row.amenities?.length > 0 && (
-                      <div className="room-card-amenities">
-                        {row.amenities.map(a => <span key={a} className="room-amenity-tag">{a}</span>)}
-                      </div>
-                    )}
-                    <div className="room-card-rate">
-                      <span className="room-rate-value">{money(row.base_rate, currency)}</span>
-                      <span className="room-rate-label">per night</span>
+                  <span className="room-card-code">{row.code}</span>
+                </div>
+                <div className="room-card-body">
+                  <div className="room-card-header">
+                    <h3 className="room-card-name">{row.name}</h3>
+                    <div className="room-card-actions">
+                      <button className="adm-btn adm-btn-sm" onClick={() => setEditing(toForm(row))}>Edit</button>
+                      <button className="adm-btn adm-btn-sm adm-btn-danger"
+                        disabled={deleting === row.id}
+                        onClick={() => handleDelete(row.id, row.name)}>
+                        {deleting === row.id ? "…" : "Delete"}
+                      </button>
                     </div>
                   </div>
+                  <div className="room-card-meta">
+                    <span>{row.beds}</span>
+                    {row.size_sqm && <span>{row.size_sqm} m²</span>}
+                    <span>Up to {row.max_adults} adult{row.max_adults !== 1 ? "s" : ""}{row.max_children > 0 ? ` + ${row.max_children} children` : ""}</span>
+                  </div>
+                  {row.description && <p className="room-card-desc">{row.description}</p>}
+                  {row.amenities?.length > 0 && (
+                    <div className="room-card-amenities">
+                      {row.amenities.slice(0, 5).map(a => <span key={a} className="room-amenity-tag">{a}</span>)}
+                      {row.amenities.length > 5 && <span className="room-amenity-tag room-amenity-more">+{row.amenities.length - 5}</span>}
+                    </div>
+                  )}
+                  <div className="room-card-footer">
+                    <div className="room-card-rate">
+                      <span className="room-rate-value">{money(row.base_rate, currency)}</span>
+                      <span className="room-rate-label">/ night</span>
+                    </div>
+                    <span className="room-card-units">{row.total_units} unit{row.total_units !== 1 ? "s" : ""}</span>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )
           ))}
         </div>
       )}
