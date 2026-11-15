@@ -28,13 +28,15 @@ class Property(Base):
     weekend_days: Mapped[list] = mapped_column(JSON, default=lambda: [4, 5])  # Mon=0 … Fri=4, Sat=5
     meal_plans: Mapped[dict] = mapped_column(JSON, default=dict)  # {"RO": 0, "BB": 12} per person per night
     contact: Mapped[dict] = mapped_column(JSON, default=dict)
-    assistant_name: Mapped[str] = mapped_column(String(64), default="Concierge")
+    assistant_name: Mapped[str] = mapped_column(String(64), default="Chatbot")
+    voice_agent_name: Mapped[str] = mapped_column(String(64), default="Voice Agent")
     tone: Mapped[str] = mapped_column(String(200), default="warm, concise and professional")
     reference_prefix: Mapped[str] = mapped_column(String(6), default="BK")
     free_cancellation_days: Mapped[int] = mapped_column(Integer, default=7)
     max_stay_nights: Mapped[int] = mapped_column(Integer, default=30)
     greeting: Mapped[str | None] = mapped_column(String(500), nullable=True)
     suggestions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     admin_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
     admin_password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
 

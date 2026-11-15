@@ -29,38 +29,48 @@ function fmt(n) { return n?.toLocaleString() ?? "—"; }
 
 // ── Card components (displayed in the right panel) ────────────────────────────
 
+function fmtD(iso) {
+  if (!iso) return iso;
+  try {
+    return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  } catch { return iso; }
+}
+
 function VoiceAvailabilityCard({ data, accent, onSelect }) {
+  const nights = data.check_in && data.check_out
+    ? Math.round((new Date(data.check_out) - new Date(data.check_in)) / 86400000)
+    : null;
   return (
-    <div className="va-event-card">
-      <p className="va-event-card-title">Available Rooms</p>
-      <p className="va-card-dates">
-        {data.check_in} → {data.check_out}
-        {data.adults ? ` · ${data.adults} adult${data.adults !== 1 ? "s" : ""}` : ""}
-        {data.children ? ` · ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}
-      </p>
-      {(data.rooms || []).map((r) => (
-        <div key={r.room_type} className="va-room-card">
-          {r.image_url && (
-            <img src={r.image_url} alt={r.name} className="va-room-img" loading="lazy" />
-          )}
-          <div className="va-room-row">
-            <div className="va-room-info">
-              <span className="va-room-name">{r.name}</span>
-              <span className="va-room-rate">
-                {data.currency} {fmt(r.avg_per_night)}<small>/night</small>
-              </span>
-              {r.sleeps && <span className="va-room-sleeps">{r.sleeps}</span>}
+    <div className="va-avail-wrap">
+      <div className="va-avail-header">
+        <p className="va-avail-title">Available Rooms</p>
+        <p className="va-avail-meta">
+          {fmtD(data.check_in)} – {fmtD(data.check_out)}
+          {nights ? ` · ${nights} night${nights !== 1 ? "s" : ""}` : ""}
+          {data.adults ? ` · ${data.adults} adult${data.adults !== 1 ? "s" : ""}` : ""}
+          {data.children ? ` · ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}
+        </p>
+      </div>
+      <div className="va-room-grid">
+        {(data.rooms || []).map((r) => (
+          <div key={r.room_type} className="va-room-tile">
+            {r.image_url
+              ? <img src={r.image_url} alt={r.name} className="va-room-tile-img" loading="lazy" />
+              : <div className="va-room-tile-placeholder" />
+            }
+            <div className="va-room-tile-body">
+              <p className="va-room-tile-name">{r.name}</p>
+              <p className="va-room-tile-rate">
+                {data.currency} {fmt(r.avg_per_night)}<span>/night</span>
+              </p>
+              {r.sleeps && <p className="va-room-tile-sleeps">{r.sleeps}</p>}
+              <button className="va-room-tile-btn" style={{ background: accent }} onClick={() => onSelect(r, data)}>
+                Select this room
+              </button>
             </div>
-            <button
-              className="va-room-select"
-              style={{ background: accent }}
-              onClick={() => onSelect(r, data)}
-            >
-              Select
-            </button>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -208,6 +218,7 @@ export default function VoiceAgent({ slug, onClose }) {
   const transcriptRef   = useRef(null);
   const pendingAsstRef  = useRef("");
   const isRespondingRef = useRef(false); // true while OAI is streaming a response
+  const seenItemsRef    = useRef(new Set()); // dedup user audio transcripts
 
   useEffect(() => {
     api.property(slug).then(setProp).catch(() => setError("Could not load property."));
@@ -310,6 +321,10 @@ export default function VoiceAgent({ slug, onClose }) {
         break;
 
       case "input_audio_buffer.speech_started":
+        // Flush any partial assistant transcript before clearing — avoids dropping interrupted replies
+        if (pendingAsstRef.current.trim()) {
+          setMessages(m => [...m, { role: "assistant", text: pendingAsstRef.current.trim() }]);
+        }
         pendingAsstRef.current = "";
         setStatus("listening");
         // Clear our audio queue; server-side VAD cancels the OAI response automatically
@@ -321,11 +336,24 @@ export default function VoiceAgent({ slug, onClose }) {
         setStatus("thinking");
         break;
 
+      // Primary event for user voice transcripts (requires input_audio_transcription in session)
+      case "conversation.item.input_audio_transcription.completed":
+        if (ev.transcript?.trim() && !seenItemsRef.current.has(ev.item_id)) {
+          seenItemsRef.current.add(ev.item_id);
+          setMessages(m => [...m, { role: "user", text: ev.transcript.trim() }]);
+        }
+        break;
+
       case "conversation.item.done":
         if (ev.item?.role === "user") {
-          const transcript = ev.item?.content?.[0]?.transcript;
-          if (transcript?.trim()) {
-            setMessages(m => [...m, { role: "user", text: transcript.trim() }]);
+          const content = ev.item?.content?.[0];
+          // input_text: sendText() already added it — skip to avoid duplicate
+          // input_audio: pick up transcript only if the model returns one
+          if (content?.type === "input_audio" && content.transcript?.trim()) {
+            if (!seenItemsRef.current.has(ev.item?.id)) {
+              seenItemsRef.current.add(ev.item?.id);
+              setMessages(m => [...m, { role: "user", text: content.transcript.trim() }]);
+            }
           }
         }
         break;
@@ -338,22 +366,25 @@ export default function VoiceAgent({ slug, onClose }) {
         }
         break;
 
-      case "response.output_audio_transcript.delta":
+      case "response.audio_transcript.delta":
         pendingAsstRef.current += ev.delta || "";
         break;
 
-      case "response.output_audio_transcript.done":
-        if (pendingAsstRef.current.trim()) {
-          setMessages(m => [...m, { role: "assistant", text: pendingAsstRef.current.trim() }]);
-          pendingAsstRef.current = "";
-        }
+      case "response.audio_transcript.done":
+        // Keep accumulating — final message is saved on response.done below
         break;
 
-      case "response.done":
+      case "response.done": {
         isRespondingRef.current = false;
         setStatus("ready");
         nextStartRef.current = 0;
+        const transcript = pendingAsstRef.current.trim();
+        if (transcript) {
+          setMessages(m => [...m, { role: "assistant", text: transcript }]);
+        }
+        pendingAsstRef.current = "";
         break;
+      }
 
       case "agent.event": {
         const aev = ev.event;
@@ -399,6 +430,7 @@ export default function VoiceAgent({ slug, onClose }) {
     setError("");
     setActiveCard(null);
     setMessages([]);
+    seenItemsRef.current.clear();
     setStatus("connecting");
 
     let stream;
@@ -474,8 +506,8 @@ export default function VoiceAgent({ slug, onClose }) {
   // ── Card interaction handlers ─────────────────────────────────────────────
 
   function handleSelectRoom(room, data) {
-    setActiveCard(null);
-    // Ask for a quote — not a booking — so the AI calls get_quote and shows the price card first
+    // Show the guest form immediately — don't wait for the AI to call get_quote
+    setActiveCard({ type: "guest_form", data: { prefill: {} } });
     sendText(
       `Please get me the price quote for ${room.name} (room type: ${room.room_type}), ` +
       `${data.check_in} to ${data.check_out}, ` +
@@ -499,7 +531,7 @@ export default function VoiceAgent({ slug, onClose }) {
 
   const connected     = status !== "idle" && status !== "connecting";
   const accent        = prop?.accent || "#2f5d3a";
-  const assistantName = prop?.assistant_name || "Concierge";
+  const assistantName = "AI Voice Agent";
 
   const orbLevel =
     status === "listening" ? audioLevel :
@@ -546,7 +578,7 @@ export default function VoiceAgent({ slug, onClose }) {
             {messages.length === 0 ? (
               <p className="va-transcript-empty">Your conversation will appear here</p>
             ) : (
-              messages.map((m, i) => (
+              messages.filter(m => m.text?.trim()).map((m, i) => (
                 <div key={i} className={`va-msg va-msg-${m.role}`}>
                   <span className="va-msg-text">{m.text}</span>
                 </div>
@@ -586,52 +618,33 @@ export default function VoiceAgent({ slug, onClose }) {
         {/* ── RIGHT: card panel ── */}
         <div className="va-right">
           {!activeCard ? (
-            <div className="va-right-empty">
-              <p className="va-right-empty-title" style={{ color: accent }}>
-                {prop?.name || "AI Concierge"}
-              </p>
-              <p className="va-right-empty-sub">Ask me anything about your stay</p>
-              <div className="va-right-tips">
-                <div className="va-right-tip">
-                  <div className="va-right-tip-icon" style={{ background: accent }}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <rect x="3" y="4" width="18" height="18" rx="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="va-right-tip-label">Check Availability</p>
-                    <p className="va-right-tip-desc">"Are rooms available from Dec 20 to Dec 25?"</p>
-                  </div>
-                </div>
-                <div className="va-right-tip">
-                  <div className="va-right-tip-icon" style={{ background: accent }}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <line x1="12" y1="1" x2="12" y2="23" />
-                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="va-right-tip-label">Get a Price Quote</p>
-                    <p className="va-right-tip-desc">"How much would the master bedroom cost?"</p>
-                  </div>
-                </div>
-                <div className="va-right-tip">
-                  <div className="va-right-tip-icon" style={{ background: accent }}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                      <polyline points="22 4 12 14.01 9 11.01" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="va-right-tip-label">Book Instantly</p>
-                    <p className="va-right-tip-desc">"I'd like to book 2 nights for 2 adults."</p>
-                  </div>
+            <div
+              className="va-hero"
+              style={prop?.image_url ? { backgroundImage: `url(${prop.image_url})` } : {}}
+            >
+              <div className="va-hero-overlay" />
+              <div className="va-hero-content">
+                <p className="va-hero-name">{prop?.name || "AI Concierge"}</p>
+                <p className="va-hero-sub">{prop?.location || "Ask me anything about your stay"}</p>
+                <div className="va-hero-tips">
+                  {[
+                    { icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z", label: "Check Availability", desc: "\"Are rooms available from Dec 20 to Dec 25?\"" },
+                    { icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6", label: "Get a Price Quote", desc: "\"How much would the master bedroom cost?\"" },
+                    { icon: "M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-2.99", label: "Book Instantly", desc: "\"I'd like to book 2 nights for 2 adults.\"" },
+                  ].map(tip => (
+                    <div key={tip.label} className="va-hero-tip">
+                      <div className="va-hero-tip-icon" style={{ background: accent }}>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d={tip.icon} />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="va-hero-tip-label">{tip.label}</p>
+                        <p className="va-hero-tip-desc">{tip.desc}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

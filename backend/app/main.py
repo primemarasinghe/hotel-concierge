@@ -243,13 +243,13 @@ def health():
 @app.get("/api/properties")
 def list_properties(db: Session = Depends(get_db)):
     return [{"slug": p.slug, "name": p.name, "kind": p.kind, "location": p.location,
-             "currency": p.currency, "assistant_name": p.assistant_name,
+             "currency": p.currency, "assistant_name": "Chat Bot",
              "accent": (p.contact or {}).get("accent", "#2f5d3a")}
             for p in db.scalars(select(Property).order_by(Property.name))]
 
 
 def _default_greeting(prop: Property) -> str:
-    return f"Hello! I'm {prop.assistant_name} 🙏 your AI concierge at {prop.name}. How can I help you today?"
+    return f"Hello! I'm Chat Bot 🙏 your AI concierge at {prop.name}. How can I help you today?"
 
 
 def _default_suggestions(prop: Property) -> list[str]:
@@ -266,8 +266,9 @@ def property_public(prop: Property = Depends(get_property)):
     contact = prop.contact or {}
     return {
         "slug": prop.slug, "name": prop.name, "kind": prop.kind, "location": prop.location,
-        "assistant_name": prop.assistant_name, "currency": prop.currency,
+        "assistant_name": "Chat Bot", "currency": prop.currency,
         "accent": contact.get("accent", "#2f5d3a"),
+        "image_url": prop.image_url,
         "greeting": prop.greeting or _default_greeting(prop),
         "suggestions": prop.suggestions or _default_suggestions(prop),
     }
@@ -528,7 +529,7 @@ class CreatePropertyBody(BaseModel):
     reference_prefix: str = "BK"
     check_in_time: str = "14:00"
     check_out_time: str = "11:00"
-    assistant_name: str = "Concierge"
+    assistant_name: str = "Chatbot"
     tone: str = "warm, concise and professional"
     tax_pct: float = 0
     service_charge_pct: float = 0
@@ -572,7 +573,7 @@ def super_create_property(body: CreatePropertyBody, db: Session = Depends(get_db
         reference_prefix=body.reference_prefix.upper()[:6],
         check_in_time=body.check_in_time,
         check_out_time=body.check_out_time,
-        assistant_name=body.assistant_name.strip() or "Concierge",
+        assistant_name=body.assistant_name.strip() or "Chatbot",
         tone=body.tone.strip(),
         tax_pct=body.tax_pct,
         service_charge_pct=body.service_charge_pct,
@@ -1691,25 +1692,25 @@ def admin_set_credentials(slug: str, body: SetCredentialsBody, db: Session = Dep
 # ── Property settings (customise) ─────────────────────────────────────────────
 
 class SettingsBody(BaseModel):
-    assistant_name: str = Field(..., min_length=1, max_length=64)
     tone: str = Field(..., min_length=1, max_length=200)
     greeting: str = Field(default="", max_length=500)
     suggestions: list[str] = Field(default_factory=list)
     accent: str = Field(default="#2f5d3a", pattern="^#[0-9a-fA-F]{6}$")
     widget_label: str = Field(default="Chat with us", max_length=50)
     widget_position: str = Field(default="right", pattern="^(left|right)$")
+    image_url: str = Field(default="", max_length=500)
 
 
 def _settings_out(prop: Property) -> dict:
     contact = prop.contact or {}
     return {
-        "assistant_name": prop.assistant_name,
         "tone": prop.tone,
         "greeting": prop.greeting or "",
         "suggestions": prop.suggestions or _default_suggestions(prop),
         "accent": contact.get("accent", "#2f5d3a"),
         "widget_label": contact.get("widget_label", "Chat with us"),
         "widget_position": contact.get("widget_position", "right"),
+        "image_url": prop.image_url or "",
     }
 
 
@@ -1720,10 +1721,10 @@ def admin_get_settings(prop: Property = Depends(get_property)):
 
 @app.patch("/api/admin/{slug}/settings", dependencies=[admin])
 def admin_update_settings(body: SettingsBody, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
-    prop.assistant_name = body.assistant_name.strip()
     prop.tone = body.tone.strip()
     prop.greeting = body.greeting.strip() or None
     prop.suggestions = [s.strip() for s in body.suggestions if s.strip()] or None
+    prop.image_url = body.image_url.strip() or None
     contact = prop.contact or {}
     contact["accent"] = body.accent
     contact["widget_label"] = body.widget_label.strip()
@@ -2044,16 +2045,20 @@ async def voice_realtime_ws(websocket: WebSocket, slug: str, db: Session = Depen
 
     temp_conv = Conversation(id=str(uuid4()), property_id=prop.id)
     agent = ConciergeAgent(db, prop, temp_conv)
+    _chat_name = prop.assistant_name
+    prop.assistant_name = "AI Voice Agent"
     instructions = agent.system_prompt("en") + """
 
 VOICE SESSION RULES — you are speaking aloud, not texting. These override the text-chat rules above:
 1. Keep EVERY reply under 2 sentences. No bullet points, no lists, no markdown.
 2. After showing availability say: "You can tap Select on a room, or just tell me which one you'd like."
-3. After get_quote returns, a guest details form appears on screen automatically. Say only: "The form is on screen — fill it in, or just tell me your name, email and phone number."
-4. When the guest provides their name, email and phone verbally: IMMEDIATELY call prefill_guest_details with what you heard. Then say: "I've filled in the form — check it and edit anything I got wrong, then tap Continue." Do NOT ask "Is that correct?" and do NOT call create_reservation until the guest taps Continue on the form.
-5. NEVER ask the guest to repeat their details — if you are unsure, still call prefill_guest_details with your best guess so they can correct it in the form.
-6. Never say "fill in your details below" — always say "the form is on screen".
+3. CRITICAL: When the guest names a room verbally (e.g. "master bedroom", "room 2", "the first one"), you MUST immediately call get_quote with that room_type_code and the dates/adults/children from the availability results. NEVER skip get_quote — the form cannot appear without it.
+4. After get_quote returns, a guest details form appears on screen automatically. Say only: "The form is on screen — fill it in, or just tell me your name, email and phone number."
+5. When the guest provides their name, email and phone verbally: IMMEDIATELY call prefill_guest_details with what you heard. Then say: "I've filled in the form — check it and edit anything I got wrong, then tap Continue." Do NOT ask "Is that correct?" and do NOT call create_reservation until the guest taps Continue on the form.
+6. NEVER ask the guest to repeat their details — if you are unsure, still call prefill_guest_details with your best guess so they can correct it in the form.
+7. Never say "fill in your details below" — always say "the form is on screen".
 """
+    prop.assistant_name = _chat_name  # restore
 
     oai_url = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
     oai_headers = [("Authorization", f"Bearer {settings.openai_api_key}")]

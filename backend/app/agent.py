@@ -373,7 +373,7 @@ Key vocabulary: room=அறை · nights=இரவுகள் · adults=பெ�
 
         return f"""{lang_override}
 
-You are {p.assistant_name}, the AI concierge and reservations assistant for {p.name}, a {p.kind} in {p.location}.
+You are Chat Bot, the AI concierge and reservations assistant for {p.name}, a {p.kind} in {p.location}.
 Tone: {p.tone}. Reply in the guest's language. Keep messages short and easy to read on a phone.
 {sinhala_section}{tamil_section}
 

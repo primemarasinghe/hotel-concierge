@@ -2427,7 +2427,7 @@ function Customize({ a, slug, toast }) {
   if (!form) return <div className="adm-spinner-wrap"><span className="adm-spinner" /></div>;
 
   const previewGreeting = form.greeting.trim() ||
-    `Hello! I'm ${form.assistant_name || "Concierge"} 🙏 your AI concierge at [Property Name]. How can I help you today?`;
+    `Hello! I'm Chat Bot 🙏 your AI concierge at [Property Name]. How can I help you today?`;
 
   return (
     <form className="cust-form" onSubmit={handleSave}>
@@ -2437,13 +2437,6 @@ function Customize({ a, slug, toast }) {
         <h3 className="cust-section-title">AI Agent Identity</h3>
         <p className="cust-section-desc">How the concierge introduces itself and communicates with guests.</p>
         <div className="cust-grid-2">
-          <div className="adm-field">
-            <label htmlFor="cust-name">Agent Name *</label>
-            <input id="cust-name" required value={form.assistant_name}
-              onChange={e => set("assistant_name", e.target.value)}
-              placeholder="e.g. Aria, Kai, Concierge" />
-            <span className="adm-field-hint">Name used in greetings and responses.</span>
-          </div>
           <div className="adm-field">
             <label htmlFor="cust-tone">Personality / Tone</label>
             <select id="cust-tone" value={isPreset ? form.tone : "__custom__"}
@@ -2504,6 +2497,13 @@ function Customize({ a, slug, toast }) {
                 placeholder="#2f5d3a" style={{ fontFamily: "monospace" }} />
             </div>
             <span className="adm-field-hint">Used for buttons, chat bubble, and highlights.</span>
+          </div>
+          <div className="adm-field">
+            <label htmlFor="cust-hero-img">Hero / Background Image URL</label>
+            <input id="cust-hero-img" value={form.image_url || ""}
+              onChange={e => set("image_url", e.target.value)}
+              placeholder="https://…/hero.jpg" />
+            <span className="adm-field-hint">Shown as the background in the Voice Agent idle panel. Use a high-quality landscape image (1600×900 or wider).</span>
           </div>
           <div className="adm-field">
             <label htmlFor="cust-label">Embed Button Label</label>
@@ -3636,24 +3636,59 @@ function Experiences({ a, slug, currency, toast }) {
   );
 }
 
-const TABS = [
-  ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
-  ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
-  ["transfers",       "Transfers",       "M17 8l4 4-4 4M3 12h18"],
-  ["transfer-routes", "Transfer Routes", "M2 11V17a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V11M18 7H6L3 11h18L18 7zM8 17a1 1 0 1 0 2 0M14 17a1 1 0 1 0 2 0"],
-  ["experiences",    "Experiences",    "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"],
-  ["conversations", "Conversations", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
-  ["promos",        "Promo Codes",   "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
-  ["requests",      "Requests",      "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"],
-  ["calendar",      "Calendar",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
-  ["kb",            "Knowledge Base","M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"],
-  ["rooms",         "Rooms",         "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"],
-  ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
-  ["notifications", "Notifications", "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"],
-  ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
-  ["property",      "Property",      "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"],
-  ["embed",         "Embed",         "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"],
-  ["analytics",     "Analytics",     "M18 20V10M12 20V4M6 20v-6"],
+// ── Bookings + Calendar combined view ────────────────────────────────────────
+function BookingsCalendar({ a, slug, toast, onRefresh, initialSearch, onJumpConsumed }) {
+  const [subTab, setSubTab] = useState("bookings");
+  useEffect(() => { if (initialSearch) setSubTab("bookings"); }, [initialSearch]);
+  return (
+    <>
+      <div className="adm-subtabs">
+        <button className={`adm-subtab${subTab === "bookings" ? " adm-subtab-active" : ""}`} onClick={() => setSubTab("bookings")}>Bookings</button>
+        <button className={`adm-subtab${subTab === "calendar" ? " adm-subtab-active" : ""}`} onClick={() => setSubTab("calendar")}>Calendar</button>
+      </div>
+      {subTab === "bookings" && <Bookings a={a} slug={slug} toast={toast} onRefresh={onRefresh} initialSearch={initialSearch} onJumpConsumed={onJumpConsumed} />}
+      {subTab === "calendar" && <CalendarView a={a} slug={slug} />}
+    </>
+  );
+}
+
+// ── Transfers + Routes combined view ─────────────────────────────────────────
+function TransfersHub({ a, slug, currency, toast, onRefresh }) {
+  const [subTab, setSubTab] = useState("requests");
+  return (
+    <>
+      <div className="adm-subtabs">
+        <button className={`adm-subtab${subTab === "requests" ? " adm-subtab-active" : ""}`} onClick={() => setSubTab("requests")}>Requests</button>
+        <button className={`adm-subtab${subTab === "routes" ? " adm-subtab-active" : ""}`} onClick={() => setSubTab("routes")}>Routes</button>
+      </div>
+      {subTab === "requests" && <Transfers a={a} slug={slug} currency={currency} toast={toast} onRefresh={onRefresh} />}
+      {subTab === "routes"   && <TransferRoutes a={a} slug={slug} currency={currency} toast={toast} />}
+    </>
+  );
+}
+
+const NAV_GROUPS = [
+  { label: "Operations", items: [
+    ["overview",      "Today",         "M3 22V10l9-7 9 7v12M9 22v-7h6v7"],
+    ["bookings",      "Bookings",      "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"],
+    ["transfers",     "Transfers",     "M17 8l4 4-4 4M3 12h18"],
+    ["conversations", "Conversations", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
+    ["requests",      "Requests",      "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"],
+  ]},
+  { label: "Content", items: [
+    ["rooms",         "Rooms",         "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"],
+    ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
+    ["experiences",   "Experiences",   "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"],
+    ["promos",        "Promos",        "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
+    ["kb",            "Knowledge",     "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"],
+  ]},
+  { label: "Settings", items: [
+    ["property",      "Property",      "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"],
+    ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
+    ["notifications", "Notifications", "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"],
+    ["analytics",     "Analytics",     "M18 20V10M12 20V4M6 20v-6"],
+    ["embed",         "Embed",         "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"],
+  ]},
 ];
 
 export default function Admin({ urlSlug = null }) {
@@ -3854,21 +3889,26 @@ export default function Admin({ urlSlug = null }) {
               <span>Properties</span>
             </button>
           )}
-          {isPropertyMode && TABS.map(([id, label, iconPath]) => (
-            <button
-              key={id}
-              className={`adm-nav-item${tab === id ? " adm-nav-active" : ""}`}
-              onClick={() => setTab(id)}
-              aria-current={tab === id ? "page" : undefined}
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d={iconPath}/>
-              </svg>
-              <span>{label}</span>
-              {id === "bookings"      && pending   > 0 && <span className="badge badge-amber">{pending}</span>}
-              {id === "conversations" && handoffs  > 0 && <span className="badge">{handoffs}</span>}
-              {id === "requests"      && openSRs   > 0 && <span className="badge badge-red">{openSRs}</span>}
-            </button>
+          {isPropertyMode && NAV_GROUPS.map(group => (
+            <div key={group.label} className="adm-nav-group">
+              <span className="adm-nav-group-label">{group.label}</span>
+              {group.items.map(([id, label, iconPath]) => (
+                <button
+                  key={id}
+                  className={`adm-nav-item${tab === id ? " adm-nav-active" : ""}`}
+                  onClick={() => setTab(id)}
+                  aria-current={tab === id ? "page" : undefined}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={iconPath}/>
+                  </svg>
+                  <span>{label}</span>
+                  {id === "bookings"      && pending  > 0 && <span className="badge badge-amber">{pending}</span>}
+                  {id === "conversations" && handoffs > 0 && <span className="badge">{handoffs}</span>}
+                  {id === "requests"      && openSRs  > 0 && <span className="badge badge-red">{openSRs}</span>}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -3910,22 +3950,20 @@ export default function Admin({ urlSlug = null }) {
         <main className="admin-main" key={slug}>
           {!isPropertyMode && tab === "properties" && <SuperProperties token={token} toast={toast}/>}
           {slug && tab === "overview"      && <Overview      a={a} slug={slug} goTo={setTab}/>}
-          {slug && tab === "bookings"      && <Bookings      a={a} slug={slug} toast={toast} onRefresh={refreshBadges} initialSearch={bookingJump} onJumpConsumed={() => setBookingJump("")}/>}
-          {slug && tab === "transfers"       && <Transfers       a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
-          {slug && tab === "transfer-routes" && <TransferRoutes  a={a} slug={slug} currency={currency} toast={toast}/>}
-          {slug && tab === "experiences"    && <Experiences     a={a} slug={slug} currency={currency} toast={toast}/>}
-          {slug && tab === "conversations" && <Conversations   a={a} slug={slug} onChange={refreshBadges} onViewBooking={ref => { setBookingJump(ref); setTab("bookings"); }}/>}
-          {slug && tab === "promos"        && <PromoCodes      a={a} slug={slug} toast={toast}/>}
-          {slug && tab === "requests"      && <ServiceRequests a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
-          {slug && tab === "calendar"      && <CalendarView    a={a} slug={slug}/>}
-          {slug && tab === "kb"            && <KnowledgeBase   a={a} slug={slug} toast={toast}/>}
-          {slug && tab === "rooms"         && <Rooms           a={a} slug={slug} toast={toast} currency={currency}/>}
-          {slug && tab === "seasons"       && <Seasons         a={a} slug={slug} toast={toast}/>}
-          {slug && tab === "notifications" && <Notifications   a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "bookings"      && <BookingsCalendar a={a} slug={slug} toast={toast} onRefresh={refreshBadges} initialSearch={bookingJump} onJumpConsumed={() => setBookingJump("")}/>}
+          {slug && tab === "transfers"     && <TransfersHub     a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
+          {slug && tab === "experiences"   && <Experiences      a={a} slug={slug} currency={currency} toast={toast}/>}
+          {slug && tab === "conversations" && <Conversations    a={a} slug={slug} onChange={refreshBadges} onViewBooking={ref => { setBookingJump(ref); setTab("bookings"); }}/>}
+          {slug && tab === "promos"        && <PromoCodes       a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "requests"      && <ServiceRequests  a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
+          {slug && tab === "kb"            && <KnowledgeBase    a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "rooms"         && <Rooms            a={a} slug={slug} toast={toast} currency={currency}/>}
+          {slug && tab === "seasons"       && <Seasons          a={a} slug={slug} toast={toast}/>}
+          {slug && tab === "notifications" && <Notifications    a={a} slug={slug} toast={toast}/>}
           {slug && tab === "customize"     && <Customize        a={a} slug={slug} toast={toast}/>}
           {slug && tab === "property"      && <PropertySettings a={a} slug={slug} currency={currency} toast={toast}/>}
           {slug && tab === "embed"         && <Embed            a={a} slug={slug}/>}
-          {slug && tab === "analytics"    && <Analytics        a={a} slug={slug}/>}
+          {slug && tab === "analytics"     && <Analytics        a={a} slug={slug}/>}
         </main>
       </div>
     </div>

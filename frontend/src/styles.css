@@ -446,8 +446,16 @@ a { color: var(--accent); }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 36px;
+  padding: 28px;
   overflow-y: auto;
+  position: relative;
+}
+/* hero fills the whole right panel (margin trick to escape padding) */
+.va-right > .va-hero {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  min-height: unset;
 }
 
 /* Close button */
@@ -613,57 +621,84 @@ a { color: var(--accent); }
   min-height: 1em;
 }
 
-/* ── RIGHT panel: empty / tip state ── */
-.va-right-empty {
+/* ── RIGHT panel: hero idle state ── */
+.va-hero {
+  position: relative;
   width: 100%;
-  max-width: 400px;
+  height: 100%;
+  min-height: 400px;
   display: flex;
   flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #1a2b1e;
+  background-size: cover;
+  background-position: center;
+}
+.va-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    rgba(0,0,0,0.18) 0%,
+    rgba(0,0,0,0.55) 50%,
+    rgba(0,0,0,0.75) 100%
+  );
+}
+.va-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 32px 28px 28px;
+}
+.va-hero-name {
+  font: 700 2rem/1.15 var(--display);
+  color: #fff;
+  margin: 0 0 6px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.va-hero-sub {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.75);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+.va-hero-tips {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.va-hero-tip {
+  display: flex;
   align-items: center;
-  text-align: center;
-}
-.va-right-empty-title {
-  font: 700 1.6rem/1.2 var(--display);
-  margin: 0 0 4px;
-}
-.va-right-empty-sub {
-  font-size: 0.88rem;
-  color: var(--muted);
-  margin: 0 0 28px;
-}
-.va-right-tips {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  text-align: left;
-}
-.va-right-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 16px;
-  background: var(--paper);
-  border: 1px solid var(--line);
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.18);
   border-radius: 12px;
 }
-.va-right-tip-icon {
-  width: 38px; height: 38px;
-  border-radius: 10px;
+.va-hero-tip-icon {
+  width: 34px; height: 34px;
+  border-radius: 9px;
   color: #fff;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
-.va-right-tip-label {
-  font-size: 0.84rem;
+.va-hero-tip-label {
+  font-size: 0.82rem;
   font-weight: 700;
-  color: var(--ink);
+  color: #fff;
   margin: 0 0 2px;
 }
-.va-right-tip-desc {
-  font-size: 0.75rem;
-  color: var(--muted);
+.va-hero-tip-desc {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.65);
   margin: 0;
   font-style: italic;
 }
@@ -671,24 +706,101 @@ a { color: var(--accent); }
 /* ── RIGHT panel: card wrapper ── */
 .va-card-panel {
   width: 100%;
-  max-width: 460px;
+  max-width: 440px;
 }
 
-/* Voice cards */
+/* ── Voice availability: 2-col room grid ── */
+.va-avail-wrap { width: 100%; align-self: flex-start; }
+.va-avail-header { margin-bottom: 18px; }
+.va-avail-title {
+  font: 700 1.15rem/1.2 var(--display);
+  color: var(--ink);
+  margin: 0 0 5px;
+}
+.va-avail-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.va-room-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.va-room-tile {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.18s, transform 0.18s;
+}
+.va-room-tile:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.13); transform: translateY(-2px); }
+.va-room-tile-img {
+  width: 100%;
+  height: 148px;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+.va-room-tile-placeholder {
+  width: 100%;
+  height: 148px;
+  background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+  flex-shrink: 0;
+}
+.va-room-tile-body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 3px;
+}
+.va-room-tile-name {
+  font: 700 0.95rem/1.3 var(--display);
+  color: var(--ink);
+  margin: 0;
+}
+.va-room-tile-rate {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+}
+.va-room-tile-rate span { font-weight: 400; color: var(--muted); font-size: 0.75rem; }
+.va-room-tile-sleeps {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin: 0 0 10px;
+  flex: 1;
+}
+.va-room-tile-btn {
+  width: 100%;
+  padding: 10px 0;
+  border: none;
+  border-radius: 9px;
+  color: #fff;
+  font: 700 0.84rem/1 var(--ui);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s, transform 0.1s;
+  margin-top: auto;
+}
+.va-room-tile-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+
+/* Legacy voice cards (quote, booking done) */
 .va-event-card {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 22px 24px;
+  padding: 20px 22px;
   width: 100%;
+  max-width: 420px;
   box-sizing: border-box;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.07);
 }
-.va-card-dates {
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin: -8px 0 14px;
-}
+.va-card-dates { font-size: 0.76rem; color: var(--muted); margin: -6px 0 12px; }
 .va-event-card-title {
   margin: 0 0 14px;
   font: 700 0.68rem/1 var(--ui);
@@ -696,56 +808,6 @@ a { color: var(--accent); }
   letter-spacing: 0.1em;
   color: var(--muted);
 }
-.va-room-card {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 14px;
-  margin-bottom: 14px;
-}
-.va-room-card:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-.va-room-img {
-  width: 100%;
-  height: 140px;
-  object-fit: cover;
-  border-radius: 10px;
-  margin-bottom: 10px;
-  display: block;
-}
-.va-room-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.va-room-sleeps {
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-top: 1px;
-}
-.va-room-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.va-room-name {
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-.va-room-rate { font-size: 0.8rem; color: var(--muted); }
-.va-room-rate small { font-size: 0.7rem; }
-.va-room-select {
-  flex-shrink: 0;
-  padding: 9px 20px;
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-}
-.va-room-select:hover { opacity: 0.86; transform: scale(1.02); }
 
 .va-quote-rows { display: flex; flex-direction: column; gap: 0; margin-bottom: 18px; }
 .va-quote-row {
@@ -826,8 +888,10 @@ a { color: var(--accent); }
   }
   .va-orb-wrap { width: 110px; height: 110px; margin-top: 4px; }
   .va-transcript { max-height: 110px; }
-  .va-right { padding: 20px; }
-  .va-right-empty-title { font-size: 1.2rem; }
+  .va-right { padding: 16px; }
+  .va-room-grid { grid-template-columns: 1fr; gap: 12px; }
+  .va-room-tile-img, .va-room-tile-placeholder { height: 120px; }
+  .va-hero-name { font-size: 1.4rem; }
 }
 
 /* ── Voice waveform visualizer ── */
@@ -3057,6 +3121,36 @@ details[open].avail-unavail summary::before { content: "− "; }
 }
 .adm-prop-name { font: 600 0.95rem/1.3 var(--display); color: var(--ink); }
 .adm-sidebar-location { font-size: 0.72rem; color: var(--muted); }
+.adm-nav-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
+.adm-nav-group-label {
+  font: 600 0.68rem/1 var(--ui);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.6;
+  padding: 10px 12px 4px;
+}
+.adm-subtabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 36px 0;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+}
+.adm-subtab {
+  border: none;
+  background: none;
+  font: 500 0.88rem/1 var(--ui);
+  color: var(--muted);
+  padding: 10px 14px 11px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+.adm-subtab:hover { color: var(--ink); }
+.adm-subtab-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
 .adm-sidebar-nav {
   flex: 1;
   padding: 8px 10px;
@@ -3068,12 +3162,12 @@ details[open].avail-unavail summary::before { content: "− "; }
 .adm-nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   border: 0;
   background: none;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font: 500 0.9rem/1 var(--ui);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font: 500 0.875rem/1 var(--ui);
   color: var(--muted);
   text-align: left;
   transition: background 0.12s, color 0.12s;

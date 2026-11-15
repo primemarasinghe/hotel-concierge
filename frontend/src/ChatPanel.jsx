@@ -512,7 +512,7 @@ function DateRangePicker({ onSelect, onClose }) {
     if (!start || end) {
       setStart(iso); setEnd(null);
     } else {
-      if (iso === start) return;
+      if (iso === start) { setStart(null); return; }
       const [ci, co] = iso < start ? [iso, start] : [start, iso];
       setEnd(co);
       onSelect(ci, co);
