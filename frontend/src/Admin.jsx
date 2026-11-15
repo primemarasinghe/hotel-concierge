@@ -13,13 +13,25 @@ function timeSince(ts) {
 }
 
 const STATUS_LABEL = {
-  pending:   "Awaiting confirmation",
+  pending:   "Pending",
   confirmed: "Confirmed",
   cancelled: "Cancelled",
   requested: "Requested",
 };
+const STATUS_ICON = {
+  pending:   "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01",
+  confirmed: "M20 6L9 17l-5-5",
+  cancelled: "M18 6L6 18M6 6l12 12",
+  requested: "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01",
+};
 function Status({ value }) {
-  return <span className={`status status-${value}`}>{STATUS_LABEL[value] || value}</span>;
+  const path = STATUS_ICON[value];
+  return (
+    <span className={`status status-${value}`}>
+      {path && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path}/></svg>}
+      {STATUS_LABEL[value] || value}
+    </span>
+  );
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -523,64 +535,71 @@ function BookingActionCard({ b, onConfirm, onCancel, onResend }) {
       else if (action === "resend") await onResend();
     } finally { setLoading(null); }
   }
+  const initials = (b.guest_name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div className="bac">
       <div className="bac-head">
-        <span className="bac-ref">{b.reference}</span>
-        <Status value={b.status}/>
-        <span className="bac-check-in">Check-in {fmtDate(b.check_in, { day: "numeric", month: "short", year: "numeric" })}</span>
+        <div className="bac-head-left">
+          <span className="bac-ref">{b.reference}</span>
+          <Status value={b.status}/>
+        </div>
+        <div className="bac-head-right">
+          <span className="bac-price">{money(b.total, b.currency)}</span>
+          <span className="bac-check-in">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+            Check-in {fmtDate(b.check_in, { day: "numeric", month: "short", year: "numeric" })}
+          </span>
+        </div>
       </div>
+
       <div className="bac-body">
         <div className="bac-guest">
-          <strong>{b.guest_name}</strong>
-          <a href={`mailto:${b.email}`}>{b.email}</a>
-          {b.phone && <span>{b.phone}</span>}
+          <div className="bac-avatar" aria-hidden="true">{initials}</div>
+          <div className="bac-guest-info">
+            <strong>{b.guest_name}</strong>
+            <a href={`mailto:${b.email}`}>{b.email}</a>
+            {b.phone && <span>{b.phone}</span>}
+          </div>
         </div>
+
         <div className="bac-stay">
           <div className="bac-room-line">
             {b.units > 1 ? `${b.units} × ` : ""}{b.room}
             <span className="bac-meal">{b.meal_plan}</span>
           </div>
           <div className="bac-dates-line">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
             {fmtDate(b.check_in, { day: "numeric", month: "short" })} → {fmtDate(b.check_out, { day: "numeric", month: "short" })}
             <span>· {b.nights} night{b.nights !== 1 ? "s" : ""}</span>
-            <span>· {b.adults} adult{b.adults !== 1 ? "s" : ""}{b.children ? ` + ${b.children} child${b.children !== 1 ? "ren" : ""}` : ""}</span>
+          </div>
+          <div className="bac-guests-line">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            {b.adults} adult{b.adults !== 1 ? "s" : ""}{b.children ? ` · ${b.children} child${b.children !== 1 ? "ren" : ""}` : ""}
           </div>
           {b.special_requests && (
             <div className="bac-requests">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              {b.special_requests}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>{b.special_requests}</span>
             </div>
           )}
         </div>
-        <div className="bac-price">{money(b.total, b.currency)}</div>
       </div>
+
       <div className="bac-actions">
-        <button
-          className="adm-btn adm-btn-ghost-sm"
-          onClick={() => handle("cancel")}
-          disabled={!!loading}
-        >
+        <button className="adm-btn adm-btn-ghost-sm" onClick={() => handle("cancel")} disabled={!!loading}>
           {loading === "cancel" ? "Cancelling…" : "Cancel"}
         </button>
         {onResend && (
-          <button
-            className="adm-btn adm-btn-ghost-sm"
-            onClick={() => handle("resend")}
-            disabled={!!loading}
-            title="Resend confirmation email to guest"
-          >
-            {loading === "resend" ? "Sending…" : "✉ Resend"}
+          <button className="adm-btn adm-btn-ghost-sm" onClick={() => handle("resend")} disabled={!!loading} title="Resend confirmation email to guest">
+            {loading === "resend" ? "Sending…" : (
+              <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Resend</>
+            )}
           </button>
         )}
-        <button
-          className="adm-btn adm-btn-confirm"
-          onClick={() => handle("confirm")}
-          disabled={!!loading}
-        >
+        <button className="adm-btn adm-btn-confirm" onClick={() => handle("confirm")} disabled={!!loading}>
           {loading === "confirm"
             ? <><span className="adm-spinner"/><span>Confirming…</span></>
-            : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Confirm booking</span></>
+            : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Confirm booking</span></>
           }
         </button>
       </div>
@@ -837,9 +856,14 @@ function Bookings({ a, slug, toast, onRefresh, initialSearch = "", onJumpConsume
                 <tr key={b.reference} className={b.status === "pending" ? "row-pending" : ""}>
                   <td className="ref">{b.reference}</td>
                   <td>
-                    {b.guest_name}
-                    <small><a href={`mailto:${b.email}`}>{b.email}</a></small>
-                    <small>{b.phone}</small>
+                    <div className="bk-guest-cell">
+                      <div className="bk-avatar" aria-hidden="true">{(b.guest_name || "?").charAt(0).toUpperCase()}</div>
+                      <div>
+                        {b.guest_name}
+                        <small><a href={`mailto:${b.email}`}>{b.email}</a></small>
+                        {b.phone && <small>{b.phone}</small>}
+                      </div>
+                    </div>
                   </td>
                   <td>
                     {b.units > 1 ? `${b.units} × ` : ""}{b.room}
@@ -1423,151 +1447,271 @@ function CalendarView({ a, slug }) {
     if (month === 12) { setYear(y => y + 1); setMonth(1); } else setMonth(m => m + 1);
     setSel(null);
   }
+  function goToday() { setYear(now.getFullYear()); setMonth(now.getMonth() + 1); setSel(null); }
 
-  const todayStr = now.toISOString().slice(0, 10);
-  const firstDow = data ? (new Date(year, month - 1, 1).getDay() + 6) % 7 : 0;
-  const selDay   = data?.days.find(d => d.date === sel);
-  const rtIndex  = data?.room_type_index || [];
+  const todayStr    = now.toISOString().slice(0, 10);
+  const isThisMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+  const firstDow    = data ? (new Date(year, month - 1, 1).getDay() + 6) % 7 : 0;
+  const selDay      = data?.days.find(d => d.date === sel);
+  const rtIndex     = data?.room_type_index || [];
+  const selOccPct   = selDay && data?.total_units ? Math.round((selDay.occupied / data.total_units) * 100) : 0;
+
+  const totalArrivals   = data ? data.days.reduce((s, d) => s + (d.arrivals?.length   || 0), 0) : 0;
+  const totalDepartures = data ? data.days.reduce((s, d) => s + (d.departures?.length || 0), 0) : 0;
+  const avgOcc = data?.total_units && data.days.length
+    ? Math.round(data.days.reduce((s, d) => s + (d.occupied || 0), 0) / data.days.length / data.total_units * 100)
+    : 0;
+  const peakDay  = data?.days.length ? data.days.reduce((p, d) => (!p || (d.occupied || 0) > (p.occupied || 0)) ? d : p, null) : null;
+  const upcoming = data ? data.days.filter(d => d.date >= todayStr && d.arrivals?.length > 0).slice(0, 5) : [];
 
   if (!data) return <div className="adm-loading">Loading calendar…</div>;
 
   return (
     <div className="cal-wrap">
-      <div className="cal-header">
-        <button className="adm-btn adm-btn-ghost-sm" onClick={prevMonth}>← Prev</button>
-        <h3 className="cal-title">{MONTH_NAMES[month - 1]} {year}</h3>
-        <button className="adm-btn adm-btn-ghost-sm" onClick={nextMonth}>Next →</button>
-      </div>
+      <div className="cal-layout">
 
-      {/* Room type legend */}
-      {rtIndex.length > 0 && (
-        <div className="cal-legend">
-          {rtIndex.map((rt, i) => (
-            <span key={rt.code} className="cal-legend-item">
-              <span className="cal-legend-dot" style={{ background: RT_COLORS[i % RT_COLORS.length] }} />
-              {rt.code}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="cal-grid">
-        {WEEK_DAYS.map(d => <div key={d} className="cal-weekday">{d}</div>)}
-        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} className="cal-day cal-day-empty" />)}
-        {data.days.map(day => {
-          const num     = parseInt(day.date.slice(8), 10);
-          const isToday = day.date === todayStr;
-          const isSel   = day.date === sel;
-          const rtBars  = day.room_types || [];
-          return (
-            <button
-              key={day.date}
-              className={`cal-day${isToday ? " cal-today" : ""}${isSel ? " cal-selected" : ""}`}
-              onClick={() => setSel(isSel ? null : day.date)}
-              title={rtBars.map(rt => `${rt.code}: ${rt.occupied}/${rt.total}`).join("  ")}
-            >
-              <span className="cal-day-num">{num}</span>
-              {day.arrivals?.length > 0 && (
-                <span className="cal-arrival-badge">{day.arrivals.length}</span>
-              )}
-              {/* Per-room-type mini bars */}
-              {rtBars.length > 0 && (
-                <div className="cal-rt-bars">
-                  {rtBars.map((rt, i) => (
-                    <div key={rt.code} className="cal-rt-bar-wrap">
-                      <div
-                        className="cal-rt-bar-fill"
-                        style={{
-                          height: rt.pct > 0 ? `${Math.max(rt.pct, 12)}%` : "0%",
-                          background: RT_COLORS[i % RT_COLORS.length],
-                          opacity: rt.pct >= 100 ? 1 : 0.65 + rt.pct / 300,
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-              <span className="cal-occ-txt">{day.occupied}/{data.total_units}</span>
+        {/* ── Left panel: compact calendar card ── */}
+        <div className="cal-panel-left">
+          <div className="cal-nav">
+            <button className="cal-nav-btn" onClick={prevMonth} aria-label="Previous month">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-          );
-        })}
-      </div>
-
-      {selDay && (
-        <div className="cal-detail">
-          <div className="cal-detail-head">
-            <strong>{fmtDate(selDay.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</strong>
-            <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-              {selDay.occupied}/{data.total_units} rooms occupied
-            </span>
+            <h3 className="cal-title">{MONTH_NAMES[month - 1]} {year}</h3>
+            <button className="cal-nav-btn" onClick={nextMonth} aria-label="Next month">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
           </div>
 
-          {/* Per-room-type occupancy breakdown */}
-          <div className="cal-detail-section">
-            <span className="cal-section-lbl">Room availability</span>
-            {(selDay.room_types || []).map((rt, i) => {
-              const info = rtIndex.find(x => x.code === rt.code);
-              const free = rt.total - rt.occupied;
-              const color = RT_COLORS[i % RT_COLORS.length];
+          <div className="cal-grid">
+            {WEEK_DAYS.map(d => <div key={d} className="cal-weekday">{d}</div>)}
+            {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} className="cal-day cal-day-empty" />)}
+            {data.days.map(day => {
+              const num       = parseInt(day.date.slice(8), 10);
+              const isToday   = day.date === todayStr;
+              const isSel     = day.date === sel;
+              const dow       = new Date(day.date + "T00:00:00").getDay();
+              const isWeekend = dow === 0 || dow === 6;
+              const occPct    = data.total_units ? (day.occupied / data.total_units) * 100 : 0;
+              const occLevel  = occPct >= 100 ? "full" : occPct >= 80 ? "high" : occPct >= 50 ? "mid" : occPct > 0 ? "low" : "empty";
               return (
-                <div key={rt.code} className="cal-rt-row">
-                  <span className="cal-rt-dot" style={{ background: color }} />
-                  <span className="cal-rt-name">{info?.name || rt.code}</span>
-                  <div className="cal-rt-track">
-                    <div className="cal-rt-track-fill"
-                      style={{ width: `${rt.pct}%`, background: color }} />
-                  </div>
-                  <span className={`cal-rt-count${rt.occupied >= rt.total ? " cal-rt-full" : free === 1 ? " cal-rt-low" : ""}`}>
-                    {rt.occupied}/{rt.total}
-                    {rt.occupied >= rt.total && <span className="cal-rt-badge">FULL</span>}
-                    {rt.occupied < rt.total && free === 1 && <span className="cal-rt-badge cal-rt-badge-amber">1 left</span>}
-                  </span>
-                </div>
+                <button
+                  key={day.date}
+                  className={`cal-day cal-occ-${occLevel}${isToday ? " cal-today" : ""}${isSel ? " cal-selected" : ""}${isWeekend ? " cal-day-weekend" : ""}`}
+                  onClick={() => setSel(isSel ? null : day.date)}
+                  aria-label={`${fmtDate(day.date, { weekday: "long", day: "numeric", month: "long" })}, ${day.occupied} of ${data.total_units} rooms`}
+                  aria-pressed={isSel}
+                >
+                  {data.total_units > 0 && <div className="cal-occ-fill" style={{ height: `${occPct}%` }} />}
+                  <span className="cal-day-num">{num}</span>
+                  {day.arrivals?.length > 0 && <span className="cal-arrival-badge">{day.arrivals.length}</span>}
+                  <span className="cal-occ-txt">{day.occupied}/{data.total_units}</span>
+                </button>
               );
             })}
           </div>
 
-          {selDay.arrivals?.length > 0 && (
-            <div className="cal-detail-section">
-              <span className="cal-section-lbl">Check-ins ({selDay.arrivals.length})</span>
-              {selDay.arrivals.map(b => (
-                <div key={b.reference} className="cal-booking-row">
-                  <span className="ref">{b.reference}</span>
-                  <span>{b.guest_name}</span>
-                  <small>{b.room} · {b.nights}n</small>
-                  <Status value={b.status} />
+          <div className="cal-panel-footer">
+            {!isThisMonth && (
+              <button className="cal-today-btn" onClick={goToday}>Today</button>
+            )}
+            {rtIndex.length > 0 && (
+              <div className="cal-legend">
+                {rtIndex.map((rt, i) => (
+                  <span key={rt.code} className="cal-legend-item">
+                    <span className="cal-legend-dot" style={{ background: RT_COLORS[i % RT_COLORS.length] }} />
+                    {rt.name || rt.code}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Right panel: month overview or day detail ── */}
+        <div className="cal-panel-right">
+          {!selDay ? (
+            <div className="cal-overview">
+              <div className="cal-ov-header">
+                <span className="cal-ov-title">Month Overview</span>
+                <span className="cal-ov-sub">{MONTH_NAMES[month - 1]} {year}</span>
+              </div>
+              <div className="cal-ov-stats">
+                <div className="cal-ov-stat cal-ov-stat--blue">
+                  <div className="cal-ov-stat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+                  <span className="cal-ov-stat-num">{totalArrivals}</span>
+                  <span className="cal-ov-stat-lbl">Arrivals</span>
                 </div>
-              ))}
-            </div>
-          )}
-          {selDay.inhouse?.length > 0 && (
-            <div className="cal-detail-section">
-              <span className="cal-section-lbl">In house ({selDay.inhouse.length})</span>
-              {selDay.inhouse.map(b => (
-                <div key={b.reference} className="cal-booking-row">
-                  <span className="ref">{b.reference}</span>
-                  <span>{b.guest_name}</span>
-                  <small>{b.room}</small>
+                <div className="cal-ov-stat cal-ov-stat--red">
+                  <div className="cal-ov-stat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+                  <span className="cal-ov-stat-num">{totalDepartures}</span>
+                  <span className="cal-ov-stat-lbl">Departures</span>
                 </div>
-              ))}
-            </div>
-          )}
-          {selDay.departures?.length > 0 && (
-            <div className="cal-detail-section">
-              <span className="cal-section-lbl">Check-outs ({selDay.departures.length})</span>
-              {selDay.departures.map(b => (
-                <div key={b.reference} className="cal-booking-row">
-                  <span className="ref">{b.reference}</span>
-                  <span>{b.guest_name}</span>
+                <div className="cal-ov-stat cal-ov-stat--green">
+                  <div className="cal-ov-stat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+                  <span className="cal-ov-stat-num">{avgOcc}%</span>
+                  <span className="cal-ov-stat-lbl">Avg Occupancy</span>
                 </div>
-              ))}
+                <div className="cal-ov-stat cal-ov-stat--violet">
+                  <div className="cal-ov-stat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                  <span className="cal-ov-stat-num">{peakDay ? parseInt(peakDay.date.slice(8), 10) : "—"}</span>
+                  <span className="cal-ov-stat-lbl">Peak Day</span>
+                </div>
+              </div>
+              {upcoming.length > 0 ? (
+                <div className="cal-upcoming">
+                  <span className="cal-upcoming-title">Upcoming Arrivals</span>
+                  {upcoming.map(d => {
+                    const upDow = new Date(d.date + "T00:00:00").getDay();
+                    const DOW_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+                    return (
+                      <button key={d.date} className="cal-upcoming-row" onClick={() => setSel(d.date)}>
+                        <div className="cal-upcoming-date">
+                          <span className="cal-upcoming-day">{parseInt(d.date.slice(8), 10)}</span>
+                          <span className="cal-upcoming-mon">{DOW_SHORT[upDow]}</span>
+                        </div>
+                        <div className="cal-upcoming-avatars">
+                          {d.arrivals.slice(0, 3).map(b => (
+                            <div key={b.reference} className="cal-upcoming-av" title={b.guest_name}>
+                              {(b.guest_name || "?").charAt(0).toUpperCase()}
+                            </div>
+                          ))}
+                          {d.arrivals.length > 3 && <div className="cal-upcoming-av cal-upcoming-av-more">+{d.arrivals.length - 3}</div>}
+                        </div>
+                        <div className="cal-upcoming-info">
+                          <span className="cal-upcoming-guest">
+                            {d.arrivals.length === 1 ? d.arrivals[0].guest_name : `${d.arrivals.length} guests arriving`}
+                          </span>
+                          {d.arrivals[0]?.room && <span className="cal-upcoming-room">{d.arrivals[0].room}</span>}
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="cal-upcoming-chevron" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="cal-ov-empty">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+                  <span>No upcoming arrivals this month</span>
+                </div>
+              )}
             </div>
-          )}
-          {!selDay.arrivals?.length && !selDay.inhouse?.length && !selDay.departures?.length && (
-            <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "8px 0 0" }}>No check-ins, in-house, or check-outs on this day.</p>
+          ) : (
+            <div className="cal-detail">
+              <div className="cal-detail-head">
+                <div className="cal-detail-date-row">
+                  <div className="cal-detail-date-info">
+                    <span className="cal-detail-dow">{fmtDate(selDay.date, { weekday: "long" })}</span>
+                    <strong className="cal-detail-date-str">{fmtDate(selDay.date, { day: "numeric", month: "long", year: "numeric" })}</strong>
+                  </div>
+                  <button className="cal-detail-close" onClick={() => setSel(null)} aria-label="Close">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <div className="cal-detail-occ-hero">
+                  <div className={`cal-detail-occ-pct${selOccPct >= 100 ? " cal-occ-pct-full" : selOccPct >= 80 ? " cal-occ-pct-high" : ""}`}>
+                    {selOccPct}<span>%</span>
+                  </div>
+                  <div className="cal-detail-occ-side">
+                    <span className="cal-detail-occ-rooms">{selDay.occupied} of {data.total_units} rooms occupied</span>
+                    <div className="cal-detail-occ-track">
+                      <div className="cal-detail-occ-fill" style={{ width: `${selOccPct}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="cal-detail-section">
+                <span className="cal-section-lbl">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  Room availability
+                </span>
+                {(selDay.room_types || []).map((rt, i) => {
+                  const info  = rtIndex.find(x => x.code === rt.code);
+                  const free  = rt.total - rt.occupied;
+                  const color = RT_COLORS[i % RT_COLORS.length];
+                  return (
+                    <div key={rt.code} className="cal-rt-row">
+                      <span className="cal-rt-dot" style={{ background: color }} />
+                      <span className="cal-rt-name">{info?.name || rt.code}</span>
+                      <div className="cal-rt-track">
+                        <div className="cal-rt-track-fill" style={{ width: `${rt.pct}%`, background: color }} />
+                      </div>
+                      <span className={`cal-rt-count${rt.occupied >= rt.total ? " cal-rt-full" : free === 1 ? " cal-rt-low" : ""}`}>
+                        {rt.occupied}/{rt.total}
+                        {rt.occupied >= rt.total && <span className="cal-rt-badge">FULL</span>}
+                        {rt.occupied < rt.total && free === 1 && <span className="cal-rt-badge cal-rt-badge-amber">1 left</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selDay.arrivals?.length > 0 && (
+                <div className="cal-detail-section">
+                  <span className="cal-section-lbl cal-section-lbl--in">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    Check-ins <span className="cal-section-count">{selDay.arrivals.length}</span>
+                  </span>
+                  {selDay.arrivals.map(b => (
+                    <div key={b.reference} className="cal-booking-row">
+                      <div className="cal-booking-avatar" aria-hidden="true">{(b.guest_name || "?").charAt(0).toUpperCase()}</div>
+                      <div className="cal-booking-info">
+                        <span className="cal-booking-name">{b.guest_name}</span>
+                        <span className="cal-booking-meta">{b.room}{b.nights ? ` · ${b.nights}n` : ""} · <span className="ref">{b.reference}</span></span>
+                      </div>
+                      <Status value={b.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selDay.inhouse?.length > 0 && (
+                <div className="cal-detail-section">
+                  <span className="cal-section-lbl cal-section-lbl--house">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+                    In house <span className="cal-section-count">{selDay.inhouse.length}</span>
+                  </span>
+                  {selDay.inhouse.map(b => (
+                    <div key={b.reference} className="cal-booking-row">
+                      <div className="cal-booking-avatar" aria-hidden="true">{(b.guest_name || "?").charAt(0).toUpperCase()}</div>
+                      <div className="cal-booking-info">
+                        <span className="cal-booking-name">{b.guest_name}</span>
+                        <span className="cal-booking-meta">{b.room} · <span className="ref">{b.reference}</span></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selDay.departures?.length > 0 && (
+                <div className="cal-detail-section">
+                  <span className="cal-section-lbl cal-section-lbl--out">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                    Check-outs <span className="cal-section-count">{selDay.departures.length}</span>
+                  </span>
+                  {selDay.departures.map(b => (
+                    <div key={b.reference} className="cal-booking-row">
+                      <div className="cal-booking-avatar" aria-hidden="true">{(b.guest_name || "?").charAt(0).toUpperCase()}</div>
+                      <div className="cal-booking-info">
+                        <span className="cal-booking-name">{b.guest_name}</span>
+                        <span className="cal-booking-meta"><span className="ref">{b.reference}</span></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!selDay.arrivals?.length && !selDay.inhouse?.length && !selDay.departures?.length && (
+                <div className="cal-empty-day">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/></svg>
+                  <span>No arrivals or departures</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
-      )}
+
+      </div>
     </div>
   );
 }

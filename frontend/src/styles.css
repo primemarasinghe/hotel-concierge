@@ -36,12 +36,13 @@ a { color: var(--accent); }
 .status {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 6px;
-  font: 600 0.72rem/1 'Plus Jakarta Sans', system-ui, sans-serif;
-  letter-spacing: 0.02em;
+  gap: 4px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 99px;
+  font: 600 0.7rem/1 'Plus Jakarta Sans', system-ui, sans-serif;
+  letter-spacing: 0.03em;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .status-pending, .status-requested {
   color: #92400E;
@@ -1650,76 +1651,156 @@ a { color: var(--accent); }
 
 /* ── Booking action cards ── */
 .bac-section {
-  background: #FFFBEB;
+  background: linear-gradient(135deg, #FFFDF4 0%, #FFFBEB 100%);
   border: 1px solid #FDE68A;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(217,119,6,0.08);
+  border-left: 4px solid #F59E0B;
+  border-radius: 16px;
+  padding: 22px 24px;
+  margin-bottom: 28px;
+  box-shadow: 0 4px 16px rgba(217,119,6,0.09);
 }
 .bac-section-sm { padding: 14px 20px; }
 .bac-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 16px;
-  font: 700 0.9rem/1.3 var(--ui);
-  color: #92400e;
+  margin: 0 0 20px;
+  font: 700 0.72rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #92400E;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 .bac-section-sm .bac-section-title { margin: 0; }
-.bac-section-title svg { color: #d97706; flex-shrink: 0; }
+.bac-section-title svg { color: #F59E0B; flex-shrink: 0; }
+
 .bac-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
 }
 .bac {
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: 11px;
+  background: #FFFFFF;
+  border: 1px solid #FDE68A;
+  border-left: 4px solid #F59E0B;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 12px rgba(217,119,6,0.07);
+  transition: box-shadow 0.18s, transform 0.18s;
 }
+.bac:hover { box-shadow: 0 6px 24px rgba(217,119,6,0.13); transform: translateY(-1px); }
+
+/* head: ref+status (left) | price+check-in (right) */
 .bac-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--paper);
+  padding: 14px 18px;
+  border-bottom: 1px solid #FDE68A;
+  background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 60%, #FFFBEB 100%);
 }
-.bac-ref { font: 700 0.9rem/1 var(--display); letter-spacing: 0.06em; }
-.bac-check-in { margin-left: auto; font-size: 0.78rem; color: var(--muted); }
-.bac-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.bac-guest { display: flex; flex-direction: column; gap: 2px; font-size: 0.88rem; }
-.bac-guest strong { font-size: 1rem; }
-.bac-guest a { color: var(--accent); text-decoration: none; }
-.bac-guest a:hover { text-decoration: underline; }
-.bac-guest span { color: var(--muted); }
-.bac-stay { display: flex; flex-direction: column; gap: 3px; font-size: 0.88rem; padding-top: 6px; border-top: 1px dashed var(--line); }
-.bac-room-line { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-.bac-meal { font-size: 0.75rem; font-weight: 400; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
-.bac-dates-line { display: flex; gap: 6px; flex-wrap: wrap; color: var(--muted); }
-.bac-dates-line span { white-space: nowrap; }
-.bac-requests { display: flex; align-items: baseline; gap: 5px; color: var(--muted); font-size: 0.82rem; font-style: italic; margin-top: 2px; }
-.bac-requests svg { flex-shrink: 0; position: relative; top: 1px; }
+.bac-head-left  { display: flex; align-items: center; gap: 8px; }
+.bac-head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.bac-ref {
+  font: 700 0.75rem/1 'Plus Jakarta Sans', var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #92400E;
+}
 .bac-price {
-  font: 700 1.35rem/1 var(--display);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--ink);
-  padding-top: 8px;
-  border-top: 1px dashed var(--line);
+  font: 800 1.15rem/1 'Plus Jakarta Sans', var(--display);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: #0F172A;
+  letter-spacing: -0.02em;
 }
+.bac-check-in {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 400 0.72rem/1 var(--ui);
+  color: #94A3B8;
+}
+
+/* body: guest (left) | stay (right) */
+.bac-body {
+  padding: 18px 18px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 540px) { .bac-body { grid-template-columns: 1fr; } }
+
+/* guest with avatar */
+.bac-guest { display: flex; align-items: flex-start; gap: 10px; }
+.bac-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  color: #78350F;
+  font: 700 0.88rem/38px 'Plus Jakarta Sans', var(--ui);
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+.bac-guest-info { display: flex; flex-direction: column; gap: 3px; }
+.bac-guest-info strong { font: 600 0.9rem/1.2 var(--ui); color: #0F172A; }
+.bac-guest-info a { font-size: 0.8rem; color: var(--accent); text-decoration: none; }
+.bac-guest-info a:hover { text-decoration: underline; }
+.bac-guest-info span { font-size: 0.78rem; color: #94A3B8; }
+
+/* stay details */
+.bac-stay { display: flex; flex-direction: column; gap: 7px; }
+.bac-room-line { display: flex; align-items: center; gap: 7px; font: 600 0.88rem/1 var(--ui); color: #0F172A; }
+.bac-meal { font-size: 0.7rem; font-weight: 500; color: #64748B; background: #F1F5F9; border: 1px solid #E2E8F0; border-radius: 4px; padding: 2px 7px; }
+.bac-dates-line, .bac-guests-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  color: #64748B;
+  font: 400 0.8rem/1 var(--ui);
+}
+.bac-dates-line svg, .bac-guests-line svg { flex-shrink: 0; color: #94A3B8; }
+.bac-dates-line span { white-space: nowrap; }
+.bac-requests {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: #92400E;
+  font: 400 0.78rem/1.4 var(--ui);
+  background: #FEF9C3;
+  border: 1px solid #FDE68A;
+  border-radius: 7px;
+  padding: 6px 9px;
+  margin-top: 2px;
+}
+.bac-requests svg { flex-shrink: 0; margin-top: 2px; color: #D97706; }
+
+/* action footer */
 .bac-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--line);
-  background: var(--paper);
+  padding: 12px 18px;
+  border-top: 1px solid #FDE68A;
+  background: #FFFBEB;
+}
+
+/* ── Booking table guest cell ── */
+.bk-guest-cell { display: flex; align-items: center; gap: 10px; }
+.bk-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #DBEAFE, #BFDBFE);
+  color: #1E3A8A;
+  font: 700 0.75rem/32px 'Plus Jakarta Sans', var(--ui);
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 /* ── Bookings toolbar ── */
@@ -1805,8 +1886,11 @@ a { color: var(--accent); }
 /* ── Table ── */
 .data tbody tr:hover td { background: #F8FAFC; transition: background 0.12s; }
 .row-pending td { background: #FFFBEB; }
+.row-pending td:first-child { border-left: 3px solid #F59E0B; padding-left: 13px; }
 .row-pending:hover td { background: #FEF9C3; }
 .t-tools { display: block; margin-top: 5px; font-size: 0.75rem; color: var(--muted); }
+/* fix .seg margin when inside the toolbar */
+.adm-toolbar .seg { margin-bottom: 0; }
 
 @media (max-width: 600px) {
   .admin-head, .admin-main { padding-left: 18px; padding-right: 18px; }
@@ -2171,31 +2255,36 @@ a { color: var(--accent); }
   overflow-x: auto;
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.06);
 }
 .data { width: 100%; border-collapse: collapse; font: 400 0.875rem/1.5 'Plus Jakarta Sans', var(--ui); }
-.data thead { background: #F8FAFC; }
+.data thead { background: #F8FAFC; border-radius: 14px 14px 0 0; }
 .data th {
   text-align: left;
-  font: 600 0.72rem/1 'Plus Jakarta Sans', var(--ui);
+  font: 600 0.68rem/1 'Plus Jakarta Sans', var(--ui);
   color: #94A3B8;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 12px 16px;
+  padding: 13px 18px;
   border-bottom: 1px solid #E2E8F0;
   white-space: nowrap;
 }
 .data td {
-  padding: 13px 16px;
+  padding: 15px 18px;
   border-bottom: 1px solid #F1F5F9;
   vertical-align: middle;
   color: #1E293B;
 }
 .data tr:last-child td { border-bottom: 0; }
-.data small { display: block; color: #94A3B8; font-size: 0.78rem; margin-top: 2px; }
+.data small { display: block; color: #94A3B8; font-size: 0.78rem; margin-top: 3px; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
-.ref { font-family: var(--display); font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; }
+.ref {
+  font: 600 0.82rem/1 'Plus Jakarta Sans', var(--display);
+  letter-spacing: 0.05em;
+  color: #475569;
+  white-space: nowrap;
+}
 .actions { white-space: nowrap; text-align: right; }
 .actions .btn + .btn { margin-left: 6px; }
 
@@ -3699,29 +3788,31 @@ details[open].avail-unavail summary::before { content: "− "; }
 
 /* ── Sub-tabs (Bookings/Calendar, Transfers/Routes) ── */
 .adm-subtabs {
-  display: flex;
-  gap: 0;
-  padding: 0 32px;
-  border-bottom: 1px solid var(--adm-card-border);
-  background: var(--adm-card);
-  margin-bottom: 0;
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  margin-bottom: 24px;
+  background: #F1F5F9;
+  border-radius: 11px;
+  border-bottom: none;
 }
 .adm-subtab {
   border: none;
-  background: none;
-  font: 500 0.88rem/1 var(--ui);
-  color: var(--adm-muted);
-  padding: 14px 16px 15px;
+  background: transparent;
+  font: 500 0.85rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #64748B;
+  padding: 8px 20px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.12s, border-color 0.12s;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: color 0.12s, background 0.12s, box-shadow 0.12s;
 }
-.adm-subtab:hover { color: var(--adm-ink); }
+.adm-subtab:hover { color: #0F172A; background: rgba(255,255,255,0.65); }
 .adm-subtab-active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  background: #FFFFFF;
+  color: #0F172A;
   font-weight: 700;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.12), 0 0 0 1px rgba(15,23,42,0.05);
 }
 
 /* ── Live indicator & footer links ── */
@@ -4066,46 +4157,61 @@ details[open].avail-unavail summary::before { content: "− "; }
 .row-pending { background: #fffbeb; }
 
 /* ── Calendar tab ── */
-.cal-wrap {
+/* ── Calendar ───────────────────────────────────────────────── */
+.cal-wrap { padding: 4px 0; }
+
+/* Always-split 2-column layout */
+.cal-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) { .cal-layout { grid-template-columns: 1fr; } }
+
+/* ── Left panel: compact calendar card ── */
+.cal-panel-left {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 22px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 4px 0;
+  gap: 16px;
+  box-shadow: 0 2px 16px rgba(15,23,42,0.06);
 }
-.cal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.cal-title {
-  font: 600 1.05rem/1.2 var(--ui);
-  color: var(--ink);
-  margin: 0;
-}
-.adm-btn-ghost-sm {
-  padding: 5px 12px;
-  border-radius: 7px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  font: 500 0.82rem/1 var(--ui);
+.cal-nav { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.cal-nav-btn {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #475569;
+  display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  flex-shrink: 0;
 }
-.adm-btn-ghost-sm:hover { background: var(--line); }
+.cal-nav-btn:hover { border-color: #94A3B8; background: #FFFFFF; color: #0F172A; }
+.cal-title {
+  font: 700 1.05rem/1.2 'Plus Jakarta Sans', var(--ui);
+  color: #0F172A;
+  margin: 0;
+  text-align: center;
+  flex: 1;
+}
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 5px;
 }
 .cal-weekday {
   text-align: center;
-  font: 600 0.72rem/1 var(--ui);
-  color: var(--muted);
+  font: 600 0.68rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #94A3B8;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 6px 0;
+  letter-spacing: 0.08em;
+  padding: 8px 0;
 }
 .cal-day {
   position: relative;
@@ -4114,101 +4220,326 @@ details[open].avail-unavail summary::before { content: "− "; }
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: 3px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--surface);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #E8ECF0;
+  background: #FFFFFF;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
 }
-.cal-day:hover { border-color: var(--accent); }
-.cal-day-empty {
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: default;
-  pointer-events: none;
+.cal-day:hover { border-color: var(--accent); box-shadow: 0 1px 6px rgba(15,23,42,0.07); }
+.cal-day-empty { border: 1px solid transparent; background: transparent; cursor: default; pointer-events: none; }
+.cal-day-weekend { background: #FAFAF9; border-color: #EDE9E4; }
+.cal-today {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 4%, #FFFFFF);
 }
-.cal-today { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
-.cal-selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.cal-selected {
+  border-color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 10%, #FFFFFF);
+  box-shadow: 0 1px 8px color-mix(in srgb, var(--accent) 20%, transparent);
+}
 .cal-occ-fill {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  transition: height 0.2s ease;
+  bottom: 0; left: 0; right: 0;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  transition: height 0.3s cubic-bezier(0.4,0,0.2,1);
 }
+/* Heatmap: fill gradient by occupancy level */
+.cal-occ-low  .cal-occ-fill { background: linear-gradient(to top, rgba(187,247,208,0.95) 0%, transparent 100%); }
+.cal-occ-mid  .cal-occ-fill { background: linear-gradient(to top, rgba(254,240,138,0.95) 0%, transparent 100%); }
+.cal-occ-high .cal-occ-fill { background: linear-gradient(to top, rgba(254,215,170,0.95) 0%, transparent 100%); }
+.cal-occ-full .cal-occ-fill { background: linear-gradient(to top, rgba(254,202,202,0.95) 0%, transparent 100%); }
+/* Subtle colored border by occupancy level */
+.cal-occ-low.cal-day:not(.cal-today):not(.cal-selected)  { border-color: #D1FAE5; }
+.cal-occ-mid.cal-day:not(.cal-today):not(.cal-selected)  { border-color: #FEF9C3; }
+.cal-occ-high.cal-day:not(.cal-today):not(.cal-selected) { border-color: #FFEDD5; }
+.cal-occ-full.cal-day:not(.cal-today):not(.cal-selected) { border-color: #FEE2E2; }
 .cal-day-num {
   position: relative;
   z-index: 1;
-  font: 600 0.78rem/1 var(--ui);
-  color: var(--ink);
+  font: 600 0.8rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #334155;
 }
-.cal-today .cal-day-num { color: var(--accent); }
+.cal-today .cal-day-num {
+  background: var(--accent);
+  color: #fff;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 0.76rem/1 'Plus Jakarta Sans', var(--ui);
+}
+.cal-selected .cal-day-num { font-weight: 700; color: var(--accent); }
 .cal-arrival-badge {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 4px; right: 4px;
   z-index: 2;
-  min-width: 16px;
-  height: 16px;
+  min-width: 16px; height: 16px;
   padding: 0 4px;
   background: var(--accent);
   color: #fff;
   border-radius: 99px;
-  font: 600 0.65rem/16px var(--ui);
+  font: 700 0.6rem/16px 'Plus Jakarta Sans', var(--ui);
   text-align: center;
 }
 .cal-occ-txt {
   position: relative;
   z-index: 1;
-  font: 400 0.62rem/1 var(--ui);
-  color: var(--muted);
+  font: 400 0.62rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #94A3B8;
   margin-top: 2px;
 }
-.cal-detail {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px 20px;
-  animation: fadeUp 0.18s ease;
+
+/* Panel footer: today btn + legend */
+.cal-panel-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #F1F5F9;
 }
+.cal-today-btn {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #475569;
+  font: 500 0.78rem/1 'Plus Jakarta Sans', var(--ui);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.cal-today-btn:hover { border-color: var(--accent); color: var(--accent); background: #FFFFFF; }
+
+/* ── Right panel ── */
+.cal-panel-right { min-height: 500px; }
+
+/* ── Month overview ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.cal-detail-head {
+.cal-overview {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  overflow: hidden;
+  animation: fadeUp 0.18s ease;
+  box-shadow: 0 2px 16px rgba(15,23,42,0.06);
+}
+.cal-ov-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #F1F5F9;
+  background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
+  gap: 8px;
 }
-.cal-detail-section { margin-top: 14px; }
-.cal-section-lbl {
+.cal-ov-title { font: 700 0.9rem/1 'Plus Jakarta Sans', var(--ui); color: #0F172A; }
+.cal-ov-sub   { font: 400 0.75rem/1 var(--ui); color: #94A3B8; }
+.cal-ov-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: #E2E8F0;
+}
+.cal-ov-stat {
+  background: #FFFFFF;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cal-ov-stat--blue   { border-left: 3px solid #3B82F6; }
+.cal-ov-stat--red    { border-left: 3px solid #EF4444; }
+.cal-ov-stat--green  { border-left: 3px solid #10B981; }
+.cal-ov-stat--violet { border-left: 3px solid #8B5CF6; }
+.cal-ov-stat-num { font: 800 1.9rem/1 'Plus Jakarta Sans', var(--ui); color: #0F172A; letter-spacing: -0.02em; }
+.cal-ov-stat-lbl { font: 400 0.68rem/1 var(--ui); color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; }
+.cal-ov-stat-icon {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.cal-ov-stat--blue   .cal-ov-stat-icon { background: #EFF6FF; color: #3B82F6; }
+.cal-ov-stat--red    .cal-ov-stat-icon { background: #FEF2F2; color: #EF4444; }
+.cal-ov-stat--green  .cal-ov-stat-icon { background: #ECFDF5; color: #10B981; }
+.cal-ov-stat--violet .cal-ov-stat-icon { background: #F5F3FF; color: #8B5CF6; }
+.cal-upcoming { padding: 16px 20px; border-top: 1px solid #F1F5F9; }
+.cal-upcoming-title {
   display: block;
-  font: 700 0.72rem/1 var(--ui);
-  color: var(--muted);
+  font: 700 0.65rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #94A3B8;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+.cal-upcoming-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-width: 1px 0 0 0;
+  border-style: solid;
+  border-color: #F1F5F9;
+  border-radius: 0;
+  background: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, border-radius 0.12s;
+}
+.cal-upcoming-row:first-child { border-top: none; }
+.cal-upcoming-row:hover { background: #F8FAFC; border-radius: 8px; }
+.cal-upcoming-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 36px;
+  gap: 2px;
+  background: #F1F5F9;
+  border-radius: 8px;
+  padding: 6px 4px;
+  flex-shrink: 0;
+}
+.cal-upcoming-day { font: 700 1rem/1 'Plus Jakarta Sans', var(--ui); color: #0F172A; }
+.cal-upcoming-mon { font: 400 0.6rem/1 var(--ui); color: #94A3B8; text-transform: uppercase; letter-spacing: 0.04em; }
+.cal-upcoming-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cal-upcoming-guest { font: 400 0.8rem/1.3 var(--ui); color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-upcoming-more { font: 400 0.72rem/1 var(--ui); color: #94A3B8; }
+.cal-upcoming-avatars {
+  display: flex;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.cal-upcoming-av {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #DBEAFE, #BFDBFE);
+  color: #1E3A8A;
+  font: 700 0.65rem/28px 'Plus Jakarta Sans', var(--ui);
+  text-align: center;
+  flex-shrink: 0;
+  border: 2px solid #FFFFFF;
+  margin-left: -8px;
+  user-select: none;
+}
+.cal-upcoming-av:first-child { margin-left: 0; }
+.cal-upcoming-av-more { background: #E2E8F0; color: #475569; font-size: 0.58rem; }
+.cal-upcoming-room { font: 400 0.72rem/1 var(--ui); color: #94A3B8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-upcoming-chevron { color: #CBD5E1; flex-shrink: 0; transition: color 0.12s, transform 0.12s; }
+.cal-upcoming-row:hover .cal-upcoming-chevron { color: var(--accent); transform: translateX(2px); }
+.cal-ov-empty {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px;
+  color: #CBD5E1;
+  font: 400 0.82rem/1 var(--ui);
+  border-top: 1px solid #F1F5F9;
+}
+
+/* ── Day detail panel ── */
+.cal-detail {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  overflow: hidden;
+  animation: fadeUp 0.18s ease;
+  box-shadow: 0 2px 16px rgba(15,23,42,0.06);
+}
+.cal-detail-head {
+  padding: 18px 20px;
+  border-bottom: 1px solid #F1F5F9;
+  background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+}
+.cal-detail-date-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.cal-detail-date-info { display: flex; flex-direction: column; gap: 3px; }
+.cal-detail-dow { font: 500 0.7rem/1 var(--ui); color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; }
+.cal-detail-date-str { font: 700 1rem/1.3 'Plus Jakarta Sans', var(--ui); color: #0F172A; }
+.cal-detail-close {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  background: rgba(255,255,255,0.8);
+  color: #94A3B8;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.cal-detail-close:hover { border-color: #CBD5E1; color: #475569; background: #FFFFFF; }
+.cal-detail-occ-hero { display: flex; align-items: center; gap: 16px; }
+.cal-detail-occ-pct {
+  font: 800 2.6rem/1 'Plus Jakarta Sans', var(--ui);
+  color: var(--accent);
+  flex-shrink: 0;
+  letter-spacing: -0.03em;
+}
+.cal-detail-occ-pct span { font-size: 1.3rem; opacity: 0.6; letter-spacing: 0; }
+.cal-occ-pct-high { color: #F97316; }
+.cal-occ-pct-full { color: #EF4444; }
+.cal-detail-occ-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cal-detail-occ-rooms { font: 500 0.8rem/1 'Plus Jakarta Sans', var(--ui); color: #64748B; }
+.cal-detail-occ-track { height: 6px; background: #E2E8F0; border-radius: 99px; overflow: hidden; }
+.cal-detail-occ-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.45s cubic-bezier(0.4,0,0.2,1); min-width: 2px; }
+.cal-detail-section { padding: 10px 18px; border-top: 1px solid #F1F5F9; }
+.cal-section-lbl {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 0.65rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   margin-bottom: 8px;
 }
+.cal-section-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  background: #E2E8F0; color: #475569;
+  border-radius: 99px;
+  font: 700 0.63rem/1 var(--ui);
+  margin-left: 2px;
+}
+.cal-section-lbl--in   svg { color: #2563EB; }
+.cal-section-lbl--house svg { color: #059669; }
+.cal-section-lbl--out  svg { color: #DC2626; }
 .cal-booking-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-  font: 400 0.84rem/1.4 var(--ui);
-  color: var(--ink);
-  flex-wrap: wrap;
+  gap: 9px;
+  padding: 7px 0;
+  border-top: 1px solid #F8FAFC;
 }
-.cal-booking-row .ref { font-weight: 600; font-family: monospace; font-size: 0.8rem; color: var(--accent); }
-.cal-booking-row small { color: var(--muted); font-size: 0.78rem; }
+.cal-booking-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #DBEAFE, #BFDBFE);
+  color: #1E3A8A;
+  font: 700 0.68rem/28px 'Plus Jakarta Sans', var(--ui);
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+.cal-booking-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cal-booking-name { font: 500 0.8rem/1.2 var(--ui); color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-booking-meta { font: 400 0.7rem/1 var(--ui); color: #94A3B8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-empty-day {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  color: #CBD5E1;
+  font: 400 0.82rem/1 var(--ui);
+  border-top: 1px solid #F1F5F9;
+}
 
 /* ── Room cards (list_room_types) ── */
 .room-cards-wrap {
@@ -4324,25 +4655,17 @@ details[open].avail-unavail summary::before { content: "− "; }
 .room-card-btn:hover { opacity: 0.88; }
 
 /* ── Calendar legend ── */
-.cal-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 6px 0;
-}
+.cal-legend { display: flex; flex-wrap: wrap; gap: 6px; }
 .cal-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font: 500 0.75rem/1 var(--ui);
-  color: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 0.72rem/1 'Plus Jakarta Sans', var(--ui);
+  color: #64748B;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 99px;
+  padding: 4px 10px 4px 8px;
 }
-.cal-legend-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
+.cal-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* ── Per-room-type mini bars inside each calendar day cell ── */
 .cal-rt-bars {
