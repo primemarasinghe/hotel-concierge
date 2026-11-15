@@ -5221,6 +5221,35 @@ details[open].avail-unavail summary::before { content: "− "; }
 .cust-save-row {
   padding-bottom: 24px;
 }
+.cust-embed-section { margin-top: 8px; }
+.cust-embed-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.cust-snippet-wrap {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.cust-snippet-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #E2E8F0;
+  background: #FFFFFF;
+}
+.cust-snippet-lbl { font: 600 0.75rem/1 'Plus Jakarta Sans', var(--ui); color: #64748B; }
+.cust-embed-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 
 @media (max-width: 600px) {
   .cust-grid-2 { grid-template-columns: 1fr; }

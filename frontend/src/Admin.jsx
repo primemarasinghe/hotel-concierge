@@ -2612,6 +2612,7 @@ const CURRENCIES_EXT = ["LKR", "USD", "EUR", "GBP", "AUD", "SGD", "INR", "THB", 
 function Customize({ a, slug, toast }) {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setSug = (i, v) => setForm(f => {
     const s = [...(f.suggestions || ["", "", "", ""])];
@@ -2647,10 +2648,28 @@ function Customize({ a, slug, toast }) {
 
   if (!form) return <div className="adm-spinner-wrap"><span className="adm-spinner" /></div>;
 
+  const host    = window.location.origin;
+  const snippet = [
+    `<script src="${host}/embed.js"`,
+    `        data-property="${slug}"`,
+    `        data-accent="${form.accent}"`,
+    `        data-position="${form.widget_position || "right"}"`,
+    `        data-label="${form.widget_label || "Chat with us"}"`,
+    `        defer><\/script>`,
+  ].join("\n");
+
+  function copySnippet() {
+    navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    });
+  }
+
   const previewGreeting = form.greeting.trim() ||
     `Hello! I'm Chat Bot 🙏 your AI concierge at [Property Name]. How can I help you today?`;
 
   return (
+    <>
     <form className="cust-form" onSubmit={handleSave}>
 
       {/* ── AI Identity ── */}
@@ -2761,6 +2780,43 @@ function Customize({ a, slug, toast }) {
       </div>
 
     </form>
+
+    {/* ── Embed Widget ── */}
+    <div className="cust-section cust-embed-section">
+      <div className="cust-embed-head">
+        <div>
+          <h3 className="cust-section-title">Embed Widget</h3>
+          <p className="cust-section-desc">Add the AI concierge to your hotel website with one line of code.</p>
+        </div>
+        <a href={`/widget/${slug}`} target="_blank" rel="noreferrer" className="adm-btn">
+          Preview →
+        </a>
+      </div>
+      <div className="cust-snippet-wrap">
+        <div className="cust-snippet-bar">
+          <span className="cust-snippet-lbl">Embed snippet</span>
+          <button type="button" className={`emb-copy-btn${copied ? " emb-copy-done" : ""}`} onClick={copySnippet}>
+            {copied
+              ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg> Copied!</>
+              : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</>
+            }
+          </button>
+        </div>
+        <pre className="emb-snippet">{snippet}</pre>
+        <p className="emb-hint">Paste just before the <code>&lt;/body&gt;</code> tag on every page of your website. The snippet auto-reflects any accent colour or label changes you save above.</p>
+      </div>
+      <div className="cust-embed-links">
+        <a href={`/widget/${slug}`} target="_blank" rel="noreferrer" className="emb-test-link">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+          Widget preview — <code>/widget/{slug}</code>
+        </a>
+        <a href="/embed-test.html" target="_blank" rel="noreferrer" className="emb-test-link">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+          Demo hotel site — <code>/embed-test.html</code>
+        </a>
+      </div>
+    </div>
+    </>
   );
 }
 
@@ -3916,7 +3972,6 @@ const NAV_GROUPS = [
     ["customize",     "Customize",     "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
     ["notifications", "Notifications", "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"],
     ["analytics",     "Analytics",     "M18 20V10M12 20V4M6 20v-6"],
-    ["embed",         "Embed",         "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"],
   ]},
 ];
 
@@ -4191,7 +4246,6 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "notifications" && <Notifications    a={a} slug={slug} toast={toast}/>}
           {slug && tab === "customize"     && <Customize        a={a} slug={slug} toast={toast}/>}
           {slug && tab === "property"      && <PropertySettings a={a} slug={slug} currency={currency} toast={toast}/>}
-          {slug && tab === "embed"         && <Embed            a={a} slug={slug}/>}
           {slug && tab === "analytics"     && <Analytics        a={a} slug={slug}/>}
         </main>
       </div>
