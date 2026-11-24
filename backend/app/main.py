@@ -106,6 +106,8 @@ async def _review_email_scheduler():
 
 
 _WEAK_SECRETS = {"change-me", "change-me-jwt-secret", "secret", "password", "admin", ""}
+_KB_UPLOAD_MAX    = 10 * 1024 * 1024   # 10 MB — KB file uploads
+_AUDIO_UPLOAD_MAX = 25 * 1024 * 1024   # 25 MB — Whisper API hard limit
 
 def _check_secrets() -> None:
     errors = []
@@ -1884,13 +1886,11 @@ async def admin_kb_upload(
 ):
     if not file.filename:
         raise HTTPException(400, "No file provided")
-    # Reject before reading body when Content-Length is present
-    _MAX = 10 * 1024 * 1024
-    if file.size is not None and file.size > _MAX:
-        raise HTTPException(400, "File too large — maximum 10 MB")
-    data = await file.read(_MAX + 1)
-    if len(data) > _MAX:
-        raise HTTPException(400, "File too large — maximum 10 MB")
+    if file.size is not None and file.size > _KB_UPLOAD_MAX:
+        raise HTTPException(413, "File too large — maximum 10 MB")
+    data = await file.read(_KB_UPLOAD_MAX + 1)
+    if len(data) > _KB_UPLOAD_MAX:
+        raise HTTPException(413, "File too large — maximum 10 MB")
     text = _extract_text(data, file.filename)
     if not text.strip():
         raise HTTPException(422, "No readable text found in the file")
@@ -1909,7 +1909,11 @@ async def admin_kb_upload(
 async def voice_stt(slug: str, audio: UploadFile = File(...)):
     if not settings.openai_api_key:
         raise HTTPException(503, "OPENAI_API_KEY not configured")
-    data = await audio.read()
+    if audio.size is not None and audio.size > _AUDIO_UPLOAD_MAX:
+        raise HTTPException(413, "Audio file too large — maximum 25 MB")
+    data = await audio.read(_AUDIO_UPLOAD_MAX + 1)
+    if len(data) > _AUDIO_UPLOAD_MAX:
+        raise HTTPException(413, "Audio file too large — maximum 25 MB")
     if len(data) < 500:
         raise HTTPException(400, "Audio too short")
     client = AsyncOpenAI(api_key=settings.openai_api_key)
