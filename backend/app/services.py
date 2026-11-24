@@ -7,10 +7,10 @@ import secrets
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
-from .models import (Booking, Experience, PromoCode, Property, RoomType,
+from .models import (BlockedDate, Booking, Experience, PromoCode, Property, RoomType,
                      SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
 
 REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
@@ -100,10 +100,24 @@ def units_available(db: Session, rt: RoomType, check_in: date, check_out: date,
     if exclude_booking_id:
         q = q.where(Booking.id != exclude_booking_id)
     overlapping = db.scalars(q).all()
+
+    nights = stay_nights(check_in, check_out)
+    # Fetch blocked entries covering this room type or all rooms on any of these nights
+    blocked = db.scalars(select(BlockedDate).where(
+        BlockedDate.property_id == rt.property_id,
+        BlockedDate.date.in_(nights),
+        or_(BlockedDate.room_type_id == rt.id, BlockedDate.room_type_id.is_(None)),
+    )).all()
+
     free = rt.total_units
-    for night in stay_nights(check_in, check_out):
-        used = sum(b.units for b in overlapping if b.check_in <= night < b.check_out)
-        free = min(free, rt.total_units - used)
+    for night in nights:
+        booking_used = sum(b.units for b in overlapping if b.check_in <= night < b.check_out)
+        # A NULL room_type_id block means every unit of every room type is blocked
+        if any(bd for bd in blocked if bd.date == night and bd.room_type_id is None):
+            block_units = rt.total_units
+        else:
+            block_units = sum(1 for bd in blocked if bd.date == night and bd.room_type_id == rt.id)
+        free = min(free, rt.total_units - booking_used - block_units)
     return max(free, 0)
 
 

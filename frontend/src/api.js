@@ -130,6 +130,15 @@ export const api = {
     createTransferOption: (slug, body) => request(`/api/admin/${slug}/transfer-options`, { method: "POST", body, token, isJwt }),
     updateTransferOption: (slug, id, body) => request(`/api/admin/${slug}/transfer-options/${id}`, { method: "PATCH", body, token, isJwt }),
     deleteTransferOption: (slug, id) => request(`/api/admin/${slug}/transfer-options/${id}`, { method: "DELETE", token, isJwt }),
+    blockedDates: (slug, { from: f, to: t } = {}) => {
+      const p = new URLSearchParams();
+      if (f) p.set("from_date", f);
+      if (t) p.set("to_date", t);
+      return request(`/api/admin/${slug}/blocked-dates${p.toString() ? `?${p}` : ""}`, { token, isJwt });
+    },
+    addBlockedDates: (slug, body) => request(`/api/admin/${slug}/blocked-dates`, { method: "POST", body, token, isJwt }),
+    deleteBlockedDate: (slug, id) => request(`/api/admin/${slug}/blocked-dates/${id}`, { method: "DELETE", token, isJwt }),
+    syncBlockedDates: (slug, body) => request(`/api/admin/${slug}/blocked-dates/sync`, { method: "POST", body, token, isJwt }),
   }),
 };
 

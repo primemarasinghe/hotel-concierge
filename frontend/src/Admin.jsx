@@ -3937,6 +3937,265 @@ function BookingsCalendar({ a, slug, toast, onRefresh, initialSearch, onJumpCons
   );
 }
 
+// ── Blocked Dates (SLT internal + manual) ────────────────────────────────────
+function BlockedDates({ a, slug, toast }) {
+  const [entries, setEntries]   = useState([]);
+  const [rooms,   setRooms]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [adding,  setAdding]    = useState(false);
+
+  // Add form state
+  const [fStart,  setFStart]    = useState("");
+  const [fEnd,    setFEnd]      = useState("");
+  const [fRoom,   setFRoom]     = useState("");   // "" = all rooms
+  const [fReason, setFReason]   = useState("slt_internal");
+  const [saving,  setSaving]    = useState(false);
+
+  useEffect(() => { load(); }, [slug]); // eslint-disable-line
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [bds, rs] = await Promise.all([a.blockedDates(slug), a.rooms(slug)]);
+      setEntries(bds);
+      setRooms(rs);
+    } catch (e) {
+      toast(e.message || "Failed to load blocked dates", true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Build a list of ISO date strings between start and end (inclusive)
+  function datesInRange(start, end) {
+    const out = [];
+    const s = new Date(start), e = new Date(end);
+    if (isNaN(s) || isNaN(e) || s > e) return out;
+    const cur = new Date(s);
+    while (cur <= e) {
+      out.push(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+
+  async function handleAdd() {
+    if (!fStart) return;
+    const dates = datesInRange(fStart, fEnd || fStart);
+    if (dates.length === 0) return;
+    if (dates.length > 90) { toast("Select a range of 90 days or fewer", true); return; }
+    setSaving(true);
+    try {
+      const res = await a.addBlockedDates(slug, {
+        dates,
+        room_type_id: fRoom ? parseInt(fRoom) : null,
+        reason: fReason,
+      });
+      toast(`${res.added} date(s) blocked`);
+      setAdding(false);
+      setFStart(""); setFEnd(""); setFRoom(""); setFReason("slt_internal");
+      load();
+    } catch (e) {
+      toast(e.message || "Failed to add blocked dates", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id) {
+    try {
+      await a.deleteBlockedDate(slug, id);
+      setEntries(prev => prev.filter(e => e.id !== id));
+      toast("Removed");
+    } catch (e) {
+      toast(e.message || "Failed to remove", true);
+    }
+  }
+
+  // Group entries by month
+  const grouped = [];
+  for (const bd of entries) {
+    const month = bd.date.slice(0, 7); // "YYYY-MM"
+    const last = grouped[grouped.length - 1];
+    if (!last || last.month !== month) grouped.push({ month, items: [bd] });
+    else last.items.push(bd);
+  }
+
+  function fmtMonth(m) {
+    const [y, mo] = m.split("-");
+    return new Date(+y, +mo - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  }
+  function fmtDay(d) {
+    return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  }
+
+  const REASON_LABELS = { slt_internal: "SLT Internal", maintenance: "Maintenance", manual: "Manual" };
+  const SOURCE_COLORS = { manual: "#3B82F6", slt_sync: "#8B5CF6" };
+
+  if (loading) return <div className="adm-empty">Loading…</div>;
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="adm-section-head" style={{ marginBottom: 20 }}>
+        <div>
+          <h2 className="adm-section-title">Blocked Dates</h2>
+          <p className="adm-section-sub">Dates unavailable for outside customer bookings (SLT internal reservations or manual blocks).</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="adm-btn" onClick={() => setAdding(!adding)}>
+            {adding ? "Cancel" : "+ Block dates"}
+          </button>
+          <button
+            className="adm-btn adm-btn-secondary"
+            title="Configure the SLT endpoint URL and use the sync API to push blocked dates from the SLT system"
+            disabled
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+          >
+            ↻ Sync from SLT
+          </button>
+        </div>
+      </div>
+
+      {/* SLT sync notice */}
+      <div style={{
+        background: "#F0F9FF", border: "1px solid #BAE6FD", borderRadius: 10,
+        padding: "12px 16px", marginBottom: 20, fontSize: "0.84rem", color: "#0369A1",
+        display: "flex", gap: 10, alignItems: "flex-start",
+      }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <div>
+          <strong>SLT endpoint not yet available.</strong> Once SLT provides their booking API endpoint,
+          call <code style={{ background: "#E0F2FE", padding: "1px 5px", borderRadius: 4 }}>POST /api/admin/{"{slug}"}/blocked-dates/sync</code> with
+          the blocked dates to auto-sync. Until then, add dates manually below.
+        </div>
+      </div>
+
+      {/* Add form */}
+      {adding && (
+        <div className="adm-card" style={{ marginBottom: 24, padding: "20px 24px" }}>
+          <div className="adm-card-title" style={{ marginBottom: 16 }}>Block dates</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+            <div>
+              <label className="adm-label">From date *</label>
+              <input className="adm-input" type="date" value={fStart} onChange={e => setFStart(e.target.value)} />
+            </div>
+            <div>
+              <label className="adm-label">To date <span style={{ fontWeight: 400, color: "#94A3B8" }}>(leave blank for single day)</span></label>
+              <input className="adm-input" type="date" value={fEnd} min={fStart} onChange={e => setFEnd(e.target.value)} />
+            </div>
+            <div>
+              <label className="adm-label">Applies to</label>
+              <select className="adm-input" value={fRoom} onChange={e => setFRoom(e.target.value)}>
+                <option value="">All rooms</option>
+                {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="adm-label">Reason</label>
+              <select className="adm-input" value={fReason} onChange={e => setFReason(e.target.value)}>
+                <option value="slt_internal">SLT Internal booking</option>
+                <option value="maintenance">Maintenance / renovation</option>
+                <option value="manual">Manual block</option>
+              </select>
+            </div>
+          </div>
+          {fStart && (
+            <p style={{ fontSize: "0.78rem", color: "#64748B", margin: "10px 0 0" }}>
+              {datesInRange(fStart, fEnd || fStart).length} day(s) will be blocked
+              {fRoom ? ` for ${rooms.find(r => r.id === parseInt(fRoom))?.name}` : " for all rooms"}.
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+            <button className="adm-btn" disabled={!fStart || saving} onClick={handleAdd}>
+              {saving ? "Saving…" : "Block these dates"}
+            </button>
+            <button className="adm-btn adm-btn-secondary" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {entries.length === 0 && (
+        <div className="adm-empty">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+          </svg>
+          <p>No blocked dates. Outside customers can book all rooms on all dates.</p>
+        </div>
+      )}
+
+      {/* Grouped list */}
+      {grouped.map(({ month, items }) => (
+        <div key={month} style={{ marginBottom: 24 }}>
+          <div style={{
+            fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.1em",
+            textTransform: "uppercase", color: "#64748B",
+            padding: "6px 0", borderBottom: "1px solid #E2E8F0", marginBottom: 8,
+          }}>
+            {fmtMonth(month)} · {items.length} day{items.length !== 1 ? "s" : ""}
+          </div>
+          {items.map(bd => {
+            const roomName = bd.room_type_id
+              ? (rooms.find(r => r.id === bd.room_type_id)?.name || "Room")
+              : "All rooms";
+            return (
+              <div key={bd.id} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "9px 12px", borderRadius: 8, background: "#F8FAFC",
+                border: "1px solid #E2E8F0", marginBottom: 6,
+              }}>
+                <span style={{ fontSize: "0.88rem", fontWeight: 600, color: "#0F172A", minWidth: 110 }}>
+                  {fmtDay(bd.date)}
+                </span>
+                <span style={{ fontSize: "0.82rem", color: "#475569", flex: 1 }}>
+                  {roomName}
+                </span>
+                <span style={{
+                  fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px",
+                  borderRadius: 20, background: "#F1F5F9", color: "#64748B",
+                }}>
+                  {REASON_LABELS[bd.reason] || bd.reason}
+                </span>
+                <span style={{
+                  fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px",
+                  borderRadius: 20,
+                  background: bd.source === "slt_sync" ? "#F5F3FF" : "#EFF6FF",
+                  color: SOURCE_COLORS[bd.source] || "#64748B",
+                }}>
+                  {bd.source === "slt_sync" ? "SLT Sync" : "Manual"}
+                </span>
+                <button
+                  onClick={() => handleDelete(bd.id)}
+                  title="Remove this blocked date"
+                  style={{
+                    width: 28, height: 28, borderRadius: 6, border: "1px solid #E2E8F0",
+                    background: "#FFFFFF", cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center", color: "#94A3B8",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {entries.length > 0 && (
+        <div style={{ fontSize: "0.78rem", color: "#94A3B8", textAlign: "center", padding: "12px 0" }}>
+          {entries.length} blocked date{entries.length !== 1 ? "s" : ""} total
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Transfers + Routes combined view ─────────────────────────────────────────
 function TransfersHub({ a, slug, currency, toast, onRefresh }) {
   const [subTab, setSubTab] = useState("requests");
@@ -3962,6 +4221,7 @@ const NAV_GROUPS = [
   ]},
   { label: "Content", items: [
     ["rooms",         "Rooms",         "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"],
+    ["blocked",       "Blocked Dates", "M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"],
     ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
     ["experiences",   "Experiences",   "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"],
     ["promos",        "Promos",        "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
@@ -4242,6 +4502,7 @@ export default function Admin({ urlSlug = null }) {
           {slug && tab === "requests"      && <ServiceRequests  a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "kb"            && <KnowledgeBase    a={a} slug={slug} toast={toast}/>}
           {slug && tab === "rooms"         && <Rooms            a={a} slug={slug} toast={toast} currency={currency}/>}
+          {slug && tab === "blocked"       && <BlockedDates     a={a} slug={slug} toast={toast}/>}
           {slug && tab === "seasons"       && <Seasons          a={a} slug={slug} toast={toast}/>}
           {slug && tab === "notifications" && <Notifications    a={a} slug={slug} toast={toast}/>}
           {slug && tab === "customize"     && <Customize        a={a} slug={slug} toast={toast}/>}

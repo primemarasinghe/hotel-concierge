@@ -6,12 +6,12 @@ from datetime import date, datetime, timedelta, timezone
 
 import bcrypt
 import jwt as pyjwt
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from . import email_service as em
@@ -20,8 +20,8 @@ from . import services as svc
 from .agent import ConciergeAgent
 from .config import settings
 from .db import SessionLocal, get_db, init_db
-from .models import (Booking, Conversation, Experience, KnowledgeChunk, Message, PromoCode, Property,
-                     RoomType, SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
+from .models import (BlockedDate, Booking, Conversation, Experience, KnowledgeChunk, Message, PromoCode,
+                     Property, RoomType, SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
 from .ratelimit import ip_limiter, login_limiter, lookup_limiter, session_limiter
 
 async def _cleanup_limiters():
@@ -274,6 +274,21 @@ def property_public(prop: Property = Depends(get_property)):
         "greeting": prop.greeting or _default_greeting(prop),
         "suggestions": prop.suggestions or _default_suggestions(prop),
     }
+
+
+@app.get("/api/properties/{slug}/rooms")
+def public_rooms(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    return [_room_out(r) for r in db.scalars(
+        select(RoomType).where(RoomType.property_id == prop.id).order_by(RoomType.id)
+    )]
+
+
+@app.get("/api/properties/{slug}/experiences")
+def public_experiences(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    return [_experience_out(e) for e in db.scalars(
+        select(Experience).where(Experience.property_id == prop.id)
+        .order_by(Experience.category, Experience.name)
+    )]
 
 
 class ChatIn(BaseModel):
@@ -932,6 +947,103 @@ def admin_delete_room(room_id: int, prop: Property = Depends(get_property), db: 
     db.delete(r)
     db.commit()
     return {"ok": True}
+
+
+# ── Blocked dates (SLT internal / manual) ───────────────────────────────────
+
+def _bd_out(bd: BlockedDate) -> dict:
+    return {
+        "id": bd.id,
+        "date": bd.date.isoformat(),
+        "room_type_id": bd.room_type_id,
+        "reason": bd.reason,
+        "source": bd.source,
+        "created_at": bd.created_at.isoformat(),
+    }
+
+
+class BlockedDateIn(BaseModel):
+    dates: list[str] = Field(..., min_length=1, max_length=366)
+    room_type_id: int | None = None
+    reason: str = Field("manual", pattern="^(slt_internal|maintenance|manual)$")
+
+
+class SltSyncIn(BaseModel):
+    dates: list[str] = Field(..., max_length=1000)
+    room_type_id: int | None = None
+
+
+@app.get("/api/admin/{slug}/blocked-dates", dependencies=[admin])
+def admin_blocked_dates(
+    from_date: str | None = Query(None),
+    to_date:   str | None = Query(None),
+    prop: Property = Depends(get_property),
+    db: Session = Depends(get_db),
+):
+    q = select(BlockedDate).where(BlockedDate.property_id == prop.id).order_by(BlockedDate.date)
+    if from_date:
+        q = q.where(BlockedDate.date >= date.fromisoformat(from_date))
+    if to_date:
+        q = q.where(BlockedDate.date <= date.fromisoformat(to_date))
+    return [_bd_out(bd) for bd in db.scalars(q).all()]
+
+
+@app.post("/api/admin/{slug}/blocked-dates", dependencies=[admin])
+def admin_add_blocked_dates(body: BlockedDateIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    added = []
+    for d_str in body.dates:
+        try:
+            d = date.fromisoformat(d_str)
+        except ValueError:
+            continue
+        exists = db.scalar(select(BlockedDate).where(
+            BlockedDate.property_id == prop.id,
+            BlockedDate.date == d,
+            BlockedDate.room_type_id == body.room_type_id,
+            BlockedDate.source == "manual",
+        ))
+        if exists:
+            continue
+        db.add(BlockedDate(
+            property_id=prop.id, room_type_id=body.room_type_id,
+            date=d, reason=body.reason, source="manual",
+        ))
+        added.append(d_str)
+    db.commit()
+    return {"added": len(added), "dates": added}
+
+
+@app.delete("/api/admin/{slug}/blocked-dates/{bd_id}", dependencies=[admin])
+def admin_delete_blocked_date(bd_id: int, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    bd = db.scalar(select(BlockedDate).where(BlockedDate.id == bd_id, BlockedDate.property_id == prop.id))
+    if not bd:
+        raise HTTPException(404, "Blocked date not found")
+    db.delete(bd)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/admin/{slug}/blocked-dates/sync", dependencies=[admin])
+def admin_sync_blocked_dates(body: SltSyncIn, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    """Replace all slt_sync blocked dates for this property/room with the new list."""
+    db.execute(delete(BlockedDate).where(
+        BlockedDate.property_id == prop.id,
+        BlockedDate.source == "slt_sync",
+        BlockedDate.room_type_id == body.room_type_id,
+    ))
+    added = []
+    for d_str in body.dates:
+        try:
+            d = date.fromisoformat(d_str)
+        except ValueError:
+            continue
+        db.add(BlockedDate(
+            property_id=prop.id, room_type_id=body.room_type_id,
+            date=d, reason="slt_internal", source="slt_sync",
+        ))
+        added.append(d_str)
+    db.commit()
+    return {"synced": len(added), "dates": added}
 
 
 # ── Seasonal rates ──────────────────────────────────────────────────────────

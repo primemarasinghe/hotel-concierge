@@ -214,6 +214,19 @@ class Message(Base):
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
 
+class BlockedDate(Base):
+    """Dates blocked by SLT internal bookings or manual admin override."""
+    __tablename__ = "blocked_dates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
+    room_type_id: Mapped[int | None] = mapped_column(ForeignKey("room_types.id"), nullable=True, index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    reason: Mapped[str] = mapped_column(String(32), default="slt_internal")   # slt_internal | maintenance | manual
+    source: Mapped[str] = mapped_column(String(16), default="manual")         # manual | slt_sync
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ServiceRequest(Base):
     __tablename__ = "service_requests"
 
