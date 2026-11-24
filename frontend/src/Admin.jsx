@@ -67,7 +67,66 @@ function ToastStack({ items }) {
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 function Login({ onLogin, error }) {
-  const [t, setT] = useState("");
+  const [t,         setT]         = useState("");
+  const [gError,    setGError]    = useState("");
+  const [gLoading,  setGLoading]  = useState(false);
+  const googleBtnRef = useRef(null);
+  const onLoginRef   = useRef(onLogin);
+  useEffect(() => { onLoginRef.current = onLogin; }, [onLogin]);
+
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const base     = import.meta.env.VITE_API_BASE || "";
+
+  useEffect(() => {
+    if (!clientId) return;
+
+    const init = () => {
+      if (!window.google?.accounts?.id || !googleBtnRef.current) return;
+
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (resp) => {
+          setGError(""); setGLoading(true);
+          try {
+            const res = await fetch(`${base}/api/admin/auth/google`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ credential: resp.credential }),
+            });
+            if (!res.ok) {
+              const d = await res.json().catch(() => ({}));
+              throw new Error(d.detail || "Google sign-in failed");
+            }
+            const { token } = await res.json();
+            onLoginRef.current(token);
+          } catch (e) {
+            setGError(e.message || "Google sign-in failed");
+          } finally {
+            setGLoading(false);
+          }
+        },
+      });
+
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: "outline",
+        size: "large",
+        text: "signin_with",
+        width: googleBtnRef.current.offsetWidth || 340,
+        logo_alignment: "left",
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      init();
+    } else {
+      const script = document.querySelector('script[src*="accounts.google.com/gsi"]');
+      if (script) {
+        script.addEventListener("load", init);
+        return () => script.removeEventListener("load", init);
+      }
+    }
+  }, [clientId, base]);
+
   return (
     <div className="adm-login">
       <form className="adm-login-card" onSubmit={e => { e.preventDefault(); onLogin(t.trim()); }}>
@@ -80,6 +139,18 @@ function Login({ onLogin, error }) {
         </div>
         <h1>Staff Dashboard</h1>
         <p>Sign in with your admin token to manage bookings, transfers, and guest conversations.</p>
+
+        {clientId && (
+          <>
+            <div ref={googleBtnRef} style={{ width: "100%", minHeight: 44 }} />
+            {gLoading && <p style={{ margin: 0, fontSize: "0.82rem", color: "#64748B", textAlign: "center" }}>Signing in with Google…</p>}
+            {gError   && <p className="adm-field-err" style={{ justifyContent: "center" }}>{gError}</p>}
+            <div className="adm-or-divider">
+              <span>or sign in with token</span>
+            </div>
+          </>
+        )}
+
         <div className="adm-field">
           <label htmlFor="adm-token">Admin token</label>
           <input
@@ -88,7 +159,6 @@ function Login({ onLogin, error }) {
             value={t}
             onChange={e => setT(e.target.value)}
             placeholder="Enter token…"
-            autoFocus
             autoComplete="current-password"
           />
         </div>

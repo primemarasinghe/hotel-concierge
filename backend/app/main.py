@@ -24,6 +24,13 @@ from .models import (BlockedDate, Booking, Conversation, Experience, KnowledgeCh
                      Property, RoomType, SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
 from .ratelimit import ip_limiter, login_limiter, lookup_limiter, session_limiter
 
+try:
+    from google.oauth2 import id_token as _google_id_token
+    from google.auth.transport import requests as _google_requests
+    _GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    _GOOGLE_AUTH_AVAILABLE = False
+
 async def _cleanup_limiters():
     while True:
         await asyncio.sleep(3600)
@@ -525,6 +532,34 @@ def auth_refresh(slug: str, authorization: str = Header(default="")):
     new_payload = {"sub": slug, "exp": datetime.now(timezone.utc) + timedelta(hours=24)}
     new_token = pyjwt.encode(new_payload, settings.jwt_secret, algorithm="HS256")
     return {"token": new_token}
+
+
+# ---------------- admin Google OAuth ----------------
+
+class GoogleLoginBody(BaseModel):
+    credential: str
+
+@app.post("/api/admin/auth/google")
+def admin_google_login(body: GoogleLoginBody):
+    if not settings.google_client_id:
+        raise HTTPException(400, "Google login is not configured (GOOGLE_CLIENT_ID not set).")
+    if not _GOOGLE_AUTH_AVAILABLE:
+        raise HTTPException(500, "google-auth package not installed on server.")
+    try:
+        idinfo = _google_id_token.verify_oauth2_token(
+            body.credential,
+            _google_requests.Request(),
+            settings.google_client_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(401, f"Invalid Google token: {exc}")
+
+    email = (idinfo.get("email") or "").lower().strip()
+    allowed = {e.strip().lower() for e in settings.allowed_admin_emails.split(",") if e.strip()}
+    if email not in allowed:
+        raise HTTPException(403, f"Google account {email} is not authorised as admin.")
+
+    return {"token": settings.admin_token, "email": email}
 
 
 # ---------------- super-admin (cross-property management) ----------------

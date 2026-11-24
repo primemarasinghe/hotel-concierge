@@ -1,0 +1,687 @@
+'use client';
+import { useEffect, useRef, useState } from "react";
+import { api } from "../lib/concierge-api.js";
+import VoiceOrb from "./VoiceOrb.jsx";
+
+// Float32 PCM → base64 Int16 PCM (24kHz mono)
+function f32ToB64(f32arr) {
+  const i16 = new Int16Array(f32arr.length);
+  for (let i = 0; i < f32arr.length; i++) {
+    i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32arr[i] * 32767)));
+  }
+  const bytes = new Uint8Array(i16.buffer);
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+// base64 Int16 PCM → Float32 for AudioBuffer playback
+function b64ToF32(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const i16 = new Int16Array(bytes.buffer);
+  const f32 = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+  return f32;
+}
+
+function fmt(n) { return n?.toLocaleString() ?? "—"; }
+
+// ── Card components (displayed in the right panel) ────────────────────────────
+
+function fmtD(iso) {
+  if (!iso) return iso;
+  try {
+    return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  } catch { return iso; }
+}
+
+function VoiceAvailabilityCard({ data, accent, onSelect }) {
+  const nights = data.check_in && data.check_out
+    ? Math.round((new Date(data.check_out) - new Date(data.check_in)) / 86400000)
+    : null;
+  return (
+    <div className="va-avail-wrap">
+      <div className="va-avail-header">
+        <p className="va-avail-title">Available Rooms</p>
+        <p className="va-avail-meta">
+          {fmtD(data.check_in)} – {fmtD(data.check_out)}
+          {nights ? ` · ${nights} night${nights !== 1 ? "s" : ""}` : ""}
+          {data.adults ? ` · ${data.adults} adult${data.adults !== 1 ? "s" : ""}` : ""}
+          {data.children ? ` · ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}
+        </p>
+      </div>
+      <div className="va-room-grid">
+        {(data.rooms || []).map((r) => (
+          <div key={r.room_type} className="va-room-tile">
+            {r.image_url
+              ? <img src={r.image_url} alt={r.name} className="va-room-tile-img" loading="lazy" />
+              : <div className="va-room-tile-placeholder" />
+            }
+            <div className="va-room-tile-body">
+              <p className="va-room-tile-name">{r.name}</p>
+              <p className="va-room-tile-rate">
+                {data.currency} {fmt(r.avg_per_night)}<span>/night</span>
+              </p>
+              {r.sleeps && <p className="va-room-tile-sleeps">{r.sleeps}</p>}
+              <button className="va-room-tile-btn" style={{ background: accent }} onClick={() => onSelect(r, data)}>
+                Select this room
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VoiceQuoteCard({ data, accent, onConfirm }) {
+  const nights = data.nights || 1;
+  return (
+    <div className="va-event-card">
+      <p className="va-event-card-title">Booking Quote</p>
+      <div className="va-quote-rows">
+        <div className="va-quote-row"><span>Room</span><span>{data.room_name}</span></div>
+        <div className="va-quote-row"><span>Check-in</span><span>{data.check_in}</span></div>
+        <div className="va-quote-row"><span>Check-out</span><span>{data.check_out}</span></div>
+        <div className="va-quote-row"><span>Nights</span><span>{nights}</span></div>
+        <div className="va-quote-row va-quote-total">
+          <span>Total</span>
+          <span>{data.currency} {fmt(data.total)}</span>
+        </div>
+      </div>
+      <button
+        className="va-confirm-btn"
+        style={{ background: accent }}
+        onClick={() => onConfirm(data)}
+      >
+        Confirm Booking
+      </button>
+    </div>
+  );
+}
+
+function VoiceGuestForm({ accent, onSubmit, prefill = {} }) {
+  const [name,  setName]  = useState(prefill.name  || "");
+  const [email, setEmail] = useState(prefill.email || "");
+  const [phone, setPhone] = useState(prefill.phone || "");
+  const [errs,  setErrs]  = useState({});
+  const [done,  setDone]  = useState(false);
+
+  // Sync when new prefill data arrives (AI heard more details)
+  useEffect(() => {
+    if (prefill.name)  setName(prefill.name);
+    if (prefill.email) setEmail(prefill.email);
+    if (prefill.phone) setPhone(prefill.phone);
+  }, [prefill.name, prefill.email, prefill.phone]);
+
+  function validate() {
+    const e = {};
+    if (name.trim().length < 2)  e.name  = "Enter your full name";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) e.email = "Enter a valid email";
+    if (phone.trim().replace(/[\s\-+()\d]/g, "").length > 0 || phone.trim().replace(/\D/g, "").length < 7)
+      e.phone = "Enter a valid phone number";
+    return e;
+  }
+
+  function handleSubmit() {
+    const e = validate();
+    setErrs(e);
+    if (Object.keys(e).length) return;
+    setDone(true);
+    onSubmit(name.trim(), email.trim(), phone.trim());
+  }
+
+  if (done) {
+    return (
+      <div className="va-event-card">
+        <div className="va-booking-done-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke={accent}
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <p className="va-event-card-title" style={{ color: accent, textAlign: "center" }}>Details submitted</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="va-event-card">
+      <p className="va-event-card-title">Your Details</p>
+      <div className="va-form-field">
+        <label htmlFor="va-name">Full Name</label>
+        <input id="va-name" value={name} onChange={e => setName(e.target.value)}
+          placeholder="Jane Smith" autoComplete="name" />
+        {errs.name && <span className="va-form-err">{errs.name}</span>}
+      </div>
+      <div className="va-form-field">
+        <label htmlFor="va-email">Email</label>
+        <input id="va-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="jane@example.com" autoComplete="email" />
+        {errs.email && <span className="va-form-err">{errs.email}</span>}
+      </div>
+      <div className="va-form-field">
+        <label htmlFor="va-phone">Phone</label>
+        <input id="va-phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+          placeholder="+94 77 123 4567" autoComplete="tel" />
+        {errs.phone && <span className="va-form-err">{errs.phone}</span>}
+      </div>
+      <button className="va-confirm-btn" style={{ background: accent }} onClick={handleSubmit}>
+        Continue
+      </button>
+    </div>
+  );
+}
+
+function VoiceBookingDone({ data, accent }) {
+  return (
+    <div className="va-event-card">
+      <div className="va-booking-done-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke={accent}
+          strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+      <p className="va-event-card-title" style={{ color: accent, textAlign: "center" }}>Booking Confirmed</p>
+      <div className="va-quote-rows">
+        <div className="va-quote-row">
+          <span>Reference</span>
+          <span style={{ fontWeight: 700, color: accent }}>{data.reference}</span>
+        </div>
+        <div className="va-quote-row"><span>Room</span><span>{data.room}</span></div>
+        <div className="va-quote-row"><span>Check-in</span><span>{data.check_in}</span></div>
+        <div className="va-quote-row"><span>Check-out</span><span>{data.check_out}</span></div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function VoiceAgent({ slug, onClose }) {
+  const [prop,       setProp]       = useState(null);
+  const [status,     setStatus]     = useState("idle");
+  const [messages,   setMessages]   = useState([]);
+  const [activeCard, setActiveCard] = useState(null);
+  const [error,      setError]      = useState("");
+  const [audioLevel, setAudioLevel] = useState(0);
+
+  const wsRef           = useRef(null);
+  const audioCtxRef     = useRef(null);
+  const playCtxRef      = useRef(null);
+  const streamRef       = useRef(null);
+  const processorRef    = useRef(null);
+  const analyserRef     = useRef(null);
+  const nextStartRef    = useRef(0);
+  const animFrameRef    = useRef(null);
+  const transcriptRef   = useRef(null);
+  const pendingAsstRef  = useRef("");
+  const isRespondingRef = useRef(false); // true while OAI is streaming a response
+  const seenItemsRef    = useRef(new Set()); // dedup user audio transcripts
+
+  useEffect(() => {
+    api.property(slug).then(setProp).catch(() => setError("Could not load property."));
+  }, [slug]);
+
+  useEffect(() => {
+    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => () => { _disconnect(); }, []); // eslint-disable-line
+
+  // ── Audio helpers ─────────────────────────────────────────────────────────
+
+  function _enqueue(b64) {
+    const ctx = playCtxRef.current;
+    if (!ctx) return;
+    const f32 = b64ToF32(b64);
+    if (!f32.length) return;
+    const buf = ctx.createBuffer(1, f32.length, 24000);
+    buf.copyToChannel(f32, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    const now = ctx.currentTime;
+    const at  = Math.max(now + 0.05, nextStartRef.current);
+    src.start(at);
+    nextStartRef.current = at + buf.duration;
+  }
+
+  function _stopAudio() {
+    cancelAnimationFrame(animFrameRef.current);
+    setAudioLevel(0);
+    if (processorRef.current) {
+      processorRef.current.onaudioprocess = null;
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    playCtxRef.current?.close().catch(() => {});
+    playCtxRef.current = null;
+    nextStartRef.current = 0;
+  }
+
+  // Stop AI audio mid-playback (user speaks or card button pressed)
+  function _cancelPlayback() {
+    playCtxRef.current?.close().catch(() => {});
+    playCtxRef.current = null;
+    nextStartRef.current = 0;
+    // Recreate immediately so the next response has a fresh context
+    const pc = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    playCtxRef.current = pc;
+  }
+
+  function _disconnect() {
+    const ws = wsRef.current;
+    wsRef.current = null;
+    ws?.close(1000);
+    _stopAudio();
+    setStatus("idle");
+  }
+
+  // ── Send text to OpenAI (card button interactions) ────────────────────────
+
+  function sendText(text) {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    _cancelPlayback();
+    // Only cancel if OAI is actively streaming — avoids spurious cancel errors
+    if (isRespondingRef.current) {
+      ws.send(JSON.stringify({ type: "response.cancel" }));
+      isRespondingRef.current = false;
+    }
+    setMessages(m => [...m, { role: "user", text }]);
+    ws.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
+    }));
+    ws.send(JSON.stringify({ type: "response.create" }));
+  }
+
+  // ── Event handler ─────────────────────────────────────────────────────────
+
+  function _handleEvent(raw) {
+    let ev;
+    try { ev = JSON.parse(raw); } catch { return; }
+
+    switch (ev.type) {
+      case "session.created":
+      case "session.updated":
+        setStatus("ready");
+        break;
+
+      case "input_audio_buffer.speech_started":
+        // Flush any partial assistant transcript before clearing — avoids dropping interrupted replies
+        if (pendingAsstRef.current.trim()) {
+          setMessages(m => [...m, { role: "assistant", text: pendingAsstRef.current.trim() }]);
+        }
+        pendingAsstRef.current = "";
+        setStatus("listening");
+        // Clear our audio queue; server-side VAD cancels the OAI response automatically
+        _cancelPlayback();
+        isRespondingRef.current = false;
+        break;
+
+      case "input_audio_buffer.speech_stopped":
+        setStatus("thinking");
+        break;
+
+      // Primary event for user voice transcripts (requires input_audio_transcription in session)
+      case "conversation.item.input_audio_transcription.completed":
+        if (ev.transcript?.trim() && !seenItemsRef.current.has(ev.item_id)) {
+          seenItemsRef.current.add(ev.item_id);
+          setMessages(m => [...m, { role: "user", text: ev.transcript.trim() }]);
+        }
+        break;
+
+      case "conversation.item.done":
+        if (ev.item?.role === "user") {
+          const content = ev.item?.content?.[0];
+          // input_text: sendText() already added it — skip to avoid duplicate
+          // input_audio: pick up transcript only if the model returns one
+          if (content?.type === "input_audio" && content.transcript?.trim()) {
+            if (!seenItemsRef.current.has(ev.item?.id)) {
+              seenItemsRef.current.add(ev.item?.id);
+              setMessages(m => [...m, { role: "user", text: content.transcript.trim() }]);
+            }
+          }
+        }
+        break;
+
+      case "response.output_audio.delta":
+        if (ev.delta) {
+          isRespondingRef.current = true;
+          setStatus("speaking");
+          _enqueue(ev.delta);
+        }
+        break;
+
+      case "response.audio_transcript.delta":
+        pendingAsstRef.current += ev.delta || "";
+        break;
+
+      case "response.audio_transcript.done":
+        // Keep accumulating — final message is saved on response.done below
+        break;
+
+      case "response.done": {
+        isRespondingRef.current = false;
+        setStatus("ready");
+        nextStartRef.current = 0;
+        const transcript = pendingAsstRef.current.trim();
+        if (transcript) {
+          setMessages(m => [...m, { role: "assistant", text: transcript }]);
+        }
+        pendingAsstRef.current = "";
+        break;
+      }
+
+      case "agent.event": {
+        const aev = ev.event;
+        if (!aev) break;
+        if (aev.type === "availability_results")
+          setActiveCard({ type: "availability", data: aev.data });
+        else if (aev.type === "quote_result")
+          setActiveCard({ type: "quote", data: aev.data });
+        else if (aev.type === "guest_details_form")
+          setActiveCard(prev =>
+            prev?.type === "guest_form"
+              ? prev  // already showing — don't reset prefill
+              : { type: "guest_form", data: { prefill: {} } }
+          );
+        else if (aev.type === "guest_details_prefill")
+          setActiveCard(prev => ({
+            type: "guest_form",
+            data: { prefill: aev.data },
+          }));
+        else if (aev.type === "booking_created")
+          setActiveCard({ type: "booking_done", data: aev.data });
+        break;
+      }
+
+      case "error": {
+        const msg = ev.error?.message || "";
+        // Suppress spurious cancel errors — they don't affect the session
+        if (msg.toLowerCase().includes("no active response")) break;
+        setError(msg || "Something went wrong.");
+        setStatus("idle");
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
+  // ── Connect ───────────────────────────────────────────────────────────────
+
+  async function connect() {
+    if (wsRef.current || !prop) return;
+    setError("");
+    setActiveCard(null);
+    setMessages([]);
+    seenItemsRef.current.clear();
+    setStatus("connecting");
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+    } catch {
+      setError("Microphone access denied.");
+      setStatus("idle");
+      return;
+    }
+    streamRef.current = stream;
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    audioCtxRef.current = audioCtx;
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.6;
+    analyserRef.current = analyser;
+    source.connect(analyser);
+
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    processorRef.current = processor;
+    source.connect(processor);
+    processor.connect(audioCtx.destination);
+
+    const dataArr = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      animFrameRef.current = requestAnimationFrame(tick);
+      analyser.getByteFrequencyData(dataArr);
+      let sum = 0;
+      for (let i = 0; i < dataArr.length; i++) sum += (dataArr[i] / 255) ** 2;
+      setAudioLevel(Math.min(Math.sqrt(sum / dataArr.length) * 3.5, 1));
+    };
+    tick();
+
+    const playCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    playCtxRef.current = playCtx;
+
+    // Connect directly to backend — Next.js rewrites don't proxy WebSockets
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const wsBase = apiBase.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+    const ws = new WebSocket(`${wsBase}/api/properties/${slug}/voice/realtime`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      processor.onaudioprocess = (e) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({
+          type: "input_audio_buffer.append",
+          audio: f32ToB64(e.inputBuffer.getChannelData(0)),
+        }));
+      };
+    };
+
+    ws.onmessage = (evt) => _handleEvent(evt.data);
+
+    ws.onerror = () => {
+      setError("Connection failed. Please try again.");
+      _disconnect();
+    };
+
+    ws.onclose = (ev) => {
+      if (ev.code !== 1000 && ev.code !== 1001 && wsRef.current) {
+        setError("Session ended unexpectedly.");
+      }
+      wsRef.current = null;
+      _stopAudio();
+      setStatus("idle");
+    };
+  }
+
+  // ── Card interaction handlers ─────────────────────────────────────────────
+
+  function handleSelectRoom(room, data) {
+    // Show the guest form immediately — don't wait for the AI to call get_quote
+    setActiveCard({ type: "guest_form", data: { prefill: {} } });
+    sendText(
+      `Please get me the price quote for ${room.name} (room type: ${room.room_type}), ` +
+      `${data.check_in} to ${data.check_out}, ` +
+      `${data.adults} adult${data.adults !== 1 ? "s" : ""}` +
+      `${data.children ? ` and ${data.children} child${data.children !== 1 ? "ren" : ""}` : ""}, ` +
+      `meal plan ${data.meal_plan || "RO"}.`
+    );
+  }
+
+  function handleConfirmBooking(data) {
+    setActiveCard(null);
+    sendText(`Yes, please confirm my booking for ${data.room_name}, ` +
+      `${data.check_in} to ${data.check_out}. Total: ${data.currency} ${fmt(data.total)}.`);
+  }
+
+  function handleGuestSubmit(name, email, phone) {
+    sendText(`Name: ${name}\nEmail: ${email}\nPhone: ${phone}`);
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const connected     = status !== "idle" && status !== "connecting";
+  const accent        = prop?.accent || "#2f5d3a";
+  const assistantName = "AI Voice Agent";
+
+  const orbLevel =
+    status === "listening" ? audioLevel :
+    status === "speaking"  ? 0.45 :
+    status === "thinking"  ? 0.15 : 0;
+
+  const statusLabel = {
+    idle:       "Tap mic to start",
+    connecting: "Connecting...",
+    ready:      "Listening for your voice...",
+    listening:  "Listening...",
+    thinking:   "Thinking...",
+    speaking:   "Speaking...",
+  }[status] || " ";
+
+  return (
+    <div
+      className="va-backdrop"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog" aria-modal="true" aria-label="Voice concierge"
+    >
+      <div className="va-modal">
+
+        {/* ── LEFT: voice panel ── */}
+        <div className="va-left">
+          <button className="va-close" onClick={onClose} aria-label="Close voice agent">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div className="va-orb-wrap" aria-hidden="true">
+            <VoiceOrb audioLevel={orbLevel} hue={status === "speaking" ? 40 : 0} />
+          </div>
+
+          <p className="va-name">{assistantName}</p>
+          <p className="va-hotel">{prop?.name || "\xa0"}</p>
+          <p className={`va-status${status !== "idle" ? " va-status-active" : ""}`}>
+            {statusLabel}
+          </p>
+
+          <div className="va-transcript" ref={transcriptRef} aria-live="polite">
+            {messages.length === 0 ? (
+              <p className="va-transcript-empty">Your conversation will appear here</p>
+            ) : (
+              messages.filter(m => m.text?.trim()).map((m, i) => (
+                <div key={i} className={`va-msg va-msg-${m.role}`}>
+                  <span className="va-msg-text">{m.text}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {error && <p className="va-error" role="alert">{error}</p>}
+
+          <div className="va-controls">
+            <button
+              className={`va-mic${connected ? " va-mic-recording" : ""}${status === "connecting" ? " va-mic-busy" : ""}`}
+              onClick={() => connected ? _disconnect() : connect()}
+              disabled={status === "connecting" || !prop}
+              aria-label={connected ? "End voice session" : "Start voice session"}
+            >
+              {status === "connecting" ? (
+                <span className="va-spinner" aria-hidden="true" />
+              ) : connected ? (
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="none" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="2" width="6" height="13" rx="3" />
+                  <path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6" />
+                </svg>
+              )}
+            </button>
+            <p className="va-hint" aria-live="polite">
+              {connected ? "Tap to end session" : "Tap to start voice session"}
+            </p>
+          </div>
+        </div>
+
+        {/* ── RIGHT: card panel ── */}
+        <div className="va-right">
+          {!activeCard ? (
+            <div
+              className="va-hero"
+              style={prop?.image_url ? { backgroundImage: `url(${prop.image_url})` } : {}}
+            >
+              <div className="va-hero-overlay" />
+              <div className="va-hero-content">
+                <p className="va-hero-name">{prop?.name || "AI Concierge"}</p>
+                <p className="va-hero-sub">{prop?.location || "Ask me anything about your stay"}</p>
+                <div className="va-hero-tips">
+                  {[
+                    { icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z", label: "Check Availability", desc: "\"Are rooms available from Dec 20 to Dec 25?\"" },
+                    { icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6", label: "Get a Price Quote", desc: "\"How much would the master bedroom cost?\"" },
+                    { icon: "M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-2.99", label: "Book Instantly", desc: "\"I'd like to book 2 nights for 2 adults.\"" },
+                  ].map(tip => (
+                    <div key={tip.label} className="va-hero-tip">
+                      <div className="va-hero-tip-icon" style={{ background: accent }}>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d={tip.icon} />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="va-hero-tip-label">{tip.label}</p>
+                        <p className="va-hero-tip-desc">{tip.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="va-card-panel">
+              {activeCard.type === "availability" && (
+                <VoiceAvailabilityCard
+                  data={activeCard.data}
+                  accent={accent}
+                  onSelect={handleSelectRoom}
+                />
+              )}
+              {activeCard.type === "quote" && (
+                <VoiceQuoteCard
+                  data={activeCard.data}
+                  accent={accent}
+                  onConfirm={handleConfirmBooking}
+                />
+              )}
+              {activeCard.type === "guest_form" && (
+                <VoiceGuestForm
+                  accent={accent}
+                  onSubmit={handleGuestSubmit}
+                  prefill={activeCard.data?.prefill || {}}
+                />
+              )}
+              {activeCard.type === "booking_done" && (
+                <VoiceBookingDone data={activeCard.data} accent={accent} />
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}

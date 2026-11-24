@@ -1269,6 +1269,23 @@ a { color: var(--accent); }
   background: #F8FAFC;
 }
 .adm-btn-full { width: 100%; height: 46px; font-size: 0.95rem; border-radius: 10px; }
+
+/* Google sign-in divider */
+.adm-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #94A3B8;
+  font-size: 0.78rem;
+}
+.adm-or-divider::before,
+.adm-or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #E2E8F0;
+}
+.adm-or-divider span { white-space: nowrap; }
 .adm-spinner {
   width: 14px; height: 14px;
   border: 2px solid rgba(255,255,255,0.3);

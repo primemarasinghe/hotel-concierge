@@ -1,7 +1,6 @@
 import './globals.css';
-import Nav from '../components/Nav';
-import Footer from '../components/Footer';
 import AuthProvider from '../components/AuthProvider';
+import SiteShell from '../components/SiteShell';
 
 export const metadata = {
   title: 'Leisureville Sigiriya — Boutique Villa, Sri Lanka',
@@ -24,9 +23,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <AuthProvider>
-          <Nav />
-          <main>{children}</main>
-          <Footer />
+          <SiteShell>{children}</SiteShell>
         </AuthProvider>
       </body>
     </html>

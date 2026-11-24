@@ -125,9 +125,13 @@ export default function Nav() {
               </button>
             </div>
           ) : (
-            <Link href="/book" className="btn-primary" style={{ marginLeft: 8, padding: '10px 22px', fontSize: '0.85rem' }}>
+            <button
+              className="btn-primary"
+              style={{ marginLeft: 8, padding: '10px 22px', fontSize: '0.85rem' }}
+              onClick={() => window.dispatchEvent(new CustomEvent('openChatWidget'))}
+            >
               Book Now
-            </Link>
+            </button>
           )}
         </nav>
 
@@ -198,9 +202,13 @@ export default function Nav() {
               </button>
             </div>
           ) : (
-            <Link href="/book" className="btn-primary" style={{ marginTop: 16, display: 'inline-flex', fontSize: '0.95rem' }}>
+            <button
+              className="btn-primary"
+              style={{ marginTop: 16, display: 'inline-flex', fontSize: '0.95rem' }}
+              onClick={() => { window.dispatchEvent(new CustomEvent('openChatWidget')); setOpen(false); }}
+            >
               Book Now
-            </Link>
+            </button>
           )}
         </div>
       )}

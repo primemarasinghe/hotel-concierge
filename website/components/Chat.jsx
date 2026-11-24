@@ -88,11 +88,85 @@ function GuestForm({ onSend, prefill = {} }) {
   );
 }
 
+function DateRangePicker({ onSend }) {
+  const today = new Date().toISOString().split('T')[0];
+  const maxDate = (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().split('T')[0]; })();
+  const [checkIn,  setCheckIn]  = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState(false);
+
+  function fmt(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function submit() {
+    if (!checkIn)  { setErr('Please select a check-in date');  return; }
+    if (!checkOut) { setErr('Please select a check-out date'); return; }
+    if (checkOut <= checkIn) { setErr('Check-out must be after check-in'); return; }
+    setDone(true);
+    onSend(`Check-in: ${fmt(checkIn)}, Check-out: ${fmt(checkOut)}`);
+  }
+
+  if (done) {
+    return (
+      <div className="guest-form-done">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        {fmt(checkIn)} → {fmt(checkOut)}
+      </div>
+    );
+  }
+
+  const inputStyle = {
+    width: '100%', border: '1.5px solid #E8DCC8', borderRadius: 8,
+    padding: '9px 10px', fontSize: '0.85rem', background: '#FFFFFF',
+    color: '#2D1F0A', boxSizing: 'border-box',
+  };
+
+  return (
+    <div className="ev-card" style={{ background: '#FAF7F2' }}>
+      <div className="ev-card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Select Dates
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+        <div>
+          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#8A7A6A', display: 'block', marginBottom: 4 }}>Check-in</label>
+          <input type="date" value={checkIn} min={today} max={maxDate} style={inputStyle}
+            onChange={e => { setCheckIn(e.target.value); setErr(''); if (checkOut && e.target.value >= checkOut) setCheckOut(''); }}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#8A7A6A', display: 'block', marginBottom: 4 }}>Check-out</label>
+          <input type="date" value={checkOut} min={checkIn || today} max={maxDate} style={inputStyle}
+            onChange={e => { setCheckOut(e.target.value); setErr(''); }}
+          />
+        </div>
+      </div>
+      {err && <div style={{ fontSize: '0.78rem', color: '#DC2626', marginBottom: 8 }}>{err}</div>}
+      <button className="ev-card-action" onClick={submit} style={{ width: '100%', textAlign: 'center', justifyContent: 'center' }}>
+        Check Availability →
+      </button>
+    </div>
+  );
+}
+
+const DATE_ASK_RE = /what dates are you thinking|which dates|when would you like to (stay|check.?in|arrive)|what.*check.?in.*date|check.?in.*check.?out.*date|tell me the dates|dates.*thinking|looking to (stay|visit|book)/i;
+function asksDates(text) { return DATE_ASK_RE.test(text || ''); }
+
 const fmtMoney = (n, cur = 'LKR') =>
   `${cur} ${(+n).toLocaleString('en-LK', { minimumFractionDigits: 0 })}`;
 
 function EventCard({ ev, onSend, user }) {
   const d = ev.data || {};
+
+  if (ev.type === 'date_picker') {
+    return <DateRangePicker onSend={onSend} />;
+  }
+
+  if (ev.type === 'guest_details_prefill') {
+    return <GuestForm onSend={onSend} prefill={{ ...user, ...d }} />;
+  }
 
   if (ev.type === 'guest_details_form') {
     return <GuestForm onSend={onSend} prefill={user ?? {}} />;
@@ -183,7 +257,7 @@ function EventCard({ ev, onSend, user }) {
   }
 
   if (ev.type === 'room_cards') {
-    const rooms = Array.isArray(d) ? d : [];
+    const rooms = Array.isArray(d.rooms) ? d.rooms : (Array.isArray(d) ? d : []);
     return (
       <div className="ev-card">
         <div className="ev-card-title">Our Rooms</div>
@@ -202,7 +276,7 @@ function EventCard({ ev, onSend, user }) {
   }
 
   if (ev.type === 'transfer_options') {
-    const opts = Array.isArray(d) ? d : [];
+    const opts = Array.isArray(d.options) ? d.options : (Array.isArray(d) ? d : []);
     return (
       <div className="ev-card">
         <div className="ev-card-title">Transfer Options</div>
@@ -249,8 +323,10 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
   const [error, setError]             = useState('');
   const [streamContent, setStreamContent] = useState('');
   const [streamEvents, setStreamEvents]   = useState([]);
+  const [recording, setRecording]     = useState(false);
   const streamContentRef = useRef('');
   const streamEventsRef  = useRef([]);
+  const recognitionRef   = useRef(null);
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -321,6 +397,28 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
     }
   }, [busy, input]);
 
+  function toggleVoice() {
+    if (recording) { recognitionRef.current?.stop(); setRecording(false); return; }
+    const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) return;
+    const rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const t = e.results[0][0].transcript;
+      setInput(prev => (prev ? prev + ' ' : '') + t);
+      setRecording(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    };
+    rec.onerror = () => setRecording(false);
+    rec.onend   = () => setRecording(false);
+    recognitionRef.current = rec;
+    rec.start();
+    setRecording(true);
+  }
+
+  const hasSpeechAPI = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
   const hasGuestForm =
     messages.some(m => m.events?.some(e => e.type === 'guest_details_form')) ||
     streamEvents.some(e => e.type === 'guest_details_form');
@@ -363,6 +461,9 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
                 <div className="chat-msg-bubble">
                   <RichText text={m.content} />
                 </div>
+              )}
+              {m.role === 'assistant' && asksDates(m.content) && (
+                <DateRangePicker key={`dp-${i}`} onSend={send} />
               )}
               {m.events?.map((ev, j) => (
                 <EventCard key={j} ev={ev} onSend={send} user={user} />
@@ -424,7 +525,7 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
           className="chat-input"
           value={input}
           rows={1}
-          placeholder="Ask me anything…"
+          placeholder={recording ? 'Listening…' : 'Ask me anything…'}
           onChange={e => {
             setInput(e.target.value);
             e.target.style.height = '';
@@ -438,6 +539,31 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
           }}
           disabled={busy}
         />
+        {hasSpeechAPI && (
+          <button
+            onClick={toggleVoice}
+            aria-label={recording ? 'Stop recording' : 'Voice input'}
+            title={recording ? 'Stop recording' : 'Speak your message'}
+            style={{
+              width: 36, height: 36, borderRadius: 8, border: 'none', flexShrink: 0,
+              background: recording ? '#FEE2E2' : 'transparent',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: recording ? '#DC2626' : '#8A7A6A',
+              transition: 'background 0.2s, color 0.2s',
+            }}
+          >
+            {recording ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            )}
+          </button>
+        )}
         <button
           className="chat-send"
           onClick={() => send(input)}

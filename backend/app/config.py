@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     history_turns: int = 20                 # past messages fed back to the agent
     max_tool_rounds: int = 8
 
+    # ── Google OAuth (optional — admin panel) ───────────────────────────────
+    # Set GOOGLE_CLIENT_ID to enable "Sign in with Google" on the admin panel.
+    # ALLOWED_ADMIN_EMAILS is a comma-separated list of authorized Google emails.
+    google_client_id: str = ""
+    allowed_admin_emails: str = "primeshmarasingha@gmail.com"
+
     # ── Email (optional) ─────────────────────────────────────────────────────
     # Leave smtp_host empty to disable all email (safe default for dev/demo).
     smtp_host: str = ""
