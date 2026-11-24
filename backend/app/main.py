@@ -1861,6 +1861,7 @@ class PropertySettingsBody(BaseModel):
     meal_plans: dict = Field(default_factory=lambda: {"RO": 0})
     free_cancellation_days: int = Field(7, ge=0, le=365)
     max_stay_nights: int = Field(30, ge=1, le=365)
+    max_advance_days: int | None = Field(None, ge=1, le=365)
 
 
 def _property_settings_out(prop: Property) -> dict:
@@ -1875,6 +1876,7 @@ def _property_settings_out(prop: Property) -> dict:
         "meal_plans": prop.meal_plans or {"RO": 0},
         "free_cancellation_days": prop.free_cancellation_days,
         "max_stay_nights": prop.max_stay_nights,
+        "max_advance_days": prop.max_advance_days,
     }
 
 
@@ -1909,6 +1911,7 @@ def admin_update_property_settings(body: PropertySettingsBody,
     prop.meal_plans = {k.strip().upper(): float(v) for k, v in body.meal_plans.items() if k.strip()}
     prop.free_cancellation_days = body.free_cancellation_days
     prop.max_stay_nights = body.max_stay_nights
+    prop.max_advance_days = body.max_advance_days
     db.commit()
     return _property_settings_out(prop)
 

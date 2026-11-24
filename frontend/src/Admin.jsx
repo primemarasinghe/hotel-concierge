@@ -2439,6 +2439,7 @@ function PropertySettings({ a, slug, currency, toast }) {
         meal_plans,
         free_cancellation_days: parseInt(form.free_cancellation_days) || 0,
         max_stay_nights:        parseInt(form.max_stay_nights)         || 30,
+        max_advance_days:       form.max_advance_days ? (parseInt(form.max_advance_days) || null) : null,
       });
       toast.success("Property settings saved");
     } catch (err) {
@@ -2490,6 +2491,14 @@ function PropertySettings({ a, slug, currency, toast }) {
             <label htmlFor="ps-maxstay">Max Stay (nights)</label>
             <input id="ps-maxstay" type="number" min="1" max="365" value={form.max_stay_nights}
               onChange={e => set("max_stay_nights", e.target.value)} />
+          </div>
+          <div className="adm-field">
+            <label htmlFor="ps-advance">Advance Booking Limit (days)</label>
+            <input id="ps-advance" type="number" min="1" max="365"
+              value={form.max_advance_days ?? ""}
+              placeholder="No limit"
+              onChange={e => set("max_advance_days", e.target.value || null)} />
+            <span className="adm-field-hint">Outside customers can only book within this many days. Leave blank to allow any date.</span>
           </div>
         </div>
       </div>

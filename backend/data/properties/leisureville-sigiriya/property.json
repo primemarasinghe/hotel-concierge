@@ -25,7 +25,8 @@
     "tone": "warm, friendly Sri Lankan hospitality; helpful and informative",
     "reference_prefix": "LV",
     "free_cancellation_days": 7,
-    "max_stay_nights": 14
+    "max_stay_nights": 14,
+    "max_advance_days": 14
   },
   "room_types": [
     {

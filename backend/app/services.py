@@ -40,12 +40,19 @@ def stay_nights(check_in: date, check_out: date) -> list[date]:
 
 
 def validate_stay(prop: Property, check_in: date, check_out: date) -> None:
-    if check_in < today_at(prop):
+    today = today_at(prop)
+    if check_in < today:
         raise BookingError("Check-in date is in the past.")
     if check_out <= check_in:
         raise BookingError("Check-out must be after check-in.")
     if (check_out - check_in).days > prop.max_stay_nights:
         raise BookingError(f"Online bookings are limited to {prop.max_stay_nights} nights; staff can arrange longer stays.")
+    if prop.max_advance_days is not None and (check_in - today).days > prop.max_advance_days:
+        latest = (today + timedelta(days=prop.max_advance_days)).strftime("%d %b %Y")
+        raise BookingError(
+            f"Online bookings are only accepted up to {prop.max_advance_days} days in advance "
+            f"(latest check-in: {latest}). Please call or message us directly for dates beyond that."
+        )
 
 
 def validate_occupancy(rt: RoomType, adults: int, children: int, units: int) -> None:

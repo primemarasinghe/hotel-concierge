@@ -34,6 +34,7 @@ class Property(Base):
     reference_prefix: Mapped[str] = mapped_column(String(6), default="BK")
     free_cancellation_days: Mapped[int] = mapped_column(Integer, default=7)
     max_stay_nights: Mapped[int] = mapped_column(Integer, default=30)
+    max_advance_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = no limit
     greeting: Mapped[str | None] = mapped_column(String(500), nullable=True)
     suggestions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
