@@ -1,6 +1,10 @@
 export const SLUG = 'leisureville-sigiriya';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+// Server components (Node.js) need an absolute URL; browser can use relative URLs
+// which are proxied through Next.js rewrites to the backend.
+const API_BASE = typeof window === 'undefined'
+  ? (process.env.API_URL || 'http://localhost:8000')
+  : (process.env.NEXT_PUBLIC_API_URL || '');
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(`${API_BASE}${path}`, opts);

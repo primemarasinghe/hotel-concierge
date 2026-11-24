@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.API_URL || 'http://localhost:8000';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
 function adminHeaders(extra = {}) {
