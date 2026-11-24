@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 
@@ -11,9 +11,17 @@ const SLUG = 'leisureville-sigiriya';
 
 export default function ChatWidget() {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session, status } = useSession();
   const [open,      setOpen]      = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+
+  // Redirect admin users to the admin panel immediately after login
+  useEffect(() => {
+    if (session?.user?.isAdmin) {
+      router.push('/admin');
+    }
+  }, [session]);
 
   // Auto-open if returning from Google OAuth with ?chat=open
   useEffect(() => {
@@ -144,6 +152,7 @@ export default function ChatWidget() {
               onClose={() => setOpen(false)}
               fill={false}
               onOpenVoice={() => { setOpen(false); setVoiceOpen(true); }}
+              guestEmail={session?.user?.email ?? null}
             />
           )}
         </div>

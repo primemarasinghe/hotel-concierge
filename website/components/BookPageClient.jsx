@@ -7,7 +7,7 @@ const VoiceAgent = dynamic(() => import('./VoiceAgent'), { ssr: false });
 
 const SLUG = 'leisureville-sigiriya';
 
-export default function BookPageClient() {
+export default function BookPageClient({ guestEmail = null }) {
   const [voiceOpen, setVoiceOpen] = useState(false);
 
   return (
@@ -18,6 +18,7 @@ export default function BookPageClient() {
             slug={SLUG}
             fill={true}
             onOpenVoice={() => setVoiceOpen(true)}
+            guestEmail={guestEmail}
           />
         </div>
       </div>

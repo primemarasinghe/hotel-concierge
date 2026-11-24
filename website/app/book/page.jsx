@@ -35,7 +35,7 @@ export default async function BookPage() {
         </p>
       </div>
 
-      <BookPageClient />
+      <BookPageClient guestEmail={session.user?.email ?? null} />
     </div>
   );
 }

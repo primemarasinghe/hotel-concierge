@@ -302,6 +302,7 @@ class ChatIn(BaseModel):
     session_id: str = Field(min_length=32, max_length=64)
     message: str = Field(min_length=1, max_length=2000)
     lang: str = Field("en", pattern="^(en|si|ta)$")
+    guest_email: str | None = Field(None, max_length=200)
 
 
 @app.post("/api/properties/{slug}/chat")
@@ -316,6 +317,9 @@ def chat(request: Request, body: ChatIn, background_tasks: BackgroundTasks,
     if not conv:
         conv = Conversation(id=body.session_id, property_id=prop.id)
         db.add(conv)
+        db.commit()
+    if body.guest_email and not conv.guest_email:
+        conv.guest_email = body.guest_email.lower().strip()
         db.commit()
 
     agent = ConciergeAgent(db, prop, conv)
@@ -363,6 +367,9 @@ async def chat_stream(request: Request, body: ChatIn, background_tasks: Backgrou
     if not conv:
         conv = Conversation(id=body.session_id, property_id=prop.id)
         db.add(conv)
+        db.commit()
+    if body.guest_email and not conv.guest_email:
+        conv.guest_email = body.guest_email.lower().strip()
         db.commit()
 
     agent = ConciergeAgent(db, prop, conv)
@@ -428,6 +435,7 @@ def _booking_public(b: Booking, prop: Property) -> dict:
         **svc.booking_summary(b),
         "guest_name": b.guest_name,
         "phone": b.phone,
+        "created_at": b.created_at.isoformat(),
         "property_name": prop.name,
         "property_slug": prop.slug,
         "property_kind": prop.kind,
@@ -439,6 +447,23 @@ def _booking_public(b: Booking, prop: Property) -> dict:
         "contact_phone": contact.get("phone", ""),
         "contact_email": contact.get("email", ""),
     }
+
+
+@app.get("/api/booking/by-guest")
+def bookings_by_guest(request: Request, email: str, db: Session = Depends(get_db)):
+    ok, retry = lookup_limiter.check(_client_ip(request))
+    if not ok:
+        raise HTTPException(429, "Too many requests", headers={"Retry-After": str(retry)})
+    email = email.lower().strip()
+    bookings = db.scalars(
+        select(Booking).where(Booking.email == email).order_by(Booking.check_in.desc())
+    ).all()
+    results = []
+    for b in bookings:
+        prop = db.get(Property, b.property_id)
+        if prop:
+            results.append(_booking_public(b, prop))
+    return {"bookings": results}
 
 
 @app.post("/api/booking/lookup")
@@ -478,6 +503,37 @@ def guest_cancel_booking(reference: str, body: GuestCancelIn,
     out = svc.cancel_booking(db, prop, b)
     background_tasks.add_task(em.booking_cancelled, bd, pd)
     return out
+
+
+@app.get("/api/properties/{slug}/blocked-dates")
+def public_blocked_dates(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    """Return property-wide blocked dates within the next 14 days for the guest calendar."""
+    today = date.today()
+    max_date = today + timedelta(days=13)
+    dates = db.scalars(
+        select(BlockedDate.date).where(
+            BlockedDate.property_id == prop.id,
+            BlockedDate.room_type_id == None,  # noqa: E711 — property-wide blocks only
+            BlockedDate.date >= today,
+            BlockedDate.date <= max_date,
+        )
+    ).all()
+    return {"blocked": [d.isoformat() for d in dates]}
+
+
+@app.get("/api/properties/{slug}/chat/by-guest")
+def chat_by_guest(request: Request, email: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    """Return the most recent conversation session_id for a logged-in guest, or null."""
+    ok, retry = lookup_limiter.check(_client_ip(request))
+    if not ok:
+        raise HTTPException(429, "Too many requests", headers={"Retry-After": str(retry)})
+    conv = db.scalar(
+        select(Conversation)
+        .where(Conversation.property_id == prop.id, Conversation.guest_email == email.lower().strip())
+        .order_by(Conversation.last_at.desc())
+        .limit(1)
+    )
+    return {"session_id": conv.id if conv else None}
 
 
 @app.get("/api/properties/{slug}/chat/{session_id}")

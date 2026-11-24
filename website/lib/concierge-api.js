@@ -27,13 +27,16 @@ async function request(path, { method = "GET", body, token, isJwt = false } = {}
 export const api = {
   property: (slug) => request(`/api/properties/${slug}`),
   history: (slug, sid) => request(`/api/properties/${slug}/chat/${sid}`),
+  sessionByEmail: (slug, email) =>
+    request(`/api/properties/${slug}/chat/by-guest?email=${encodeURIComponent(email)}`),
+  blockedDates: (slug) => request(`/api/properties/${slug}/blocked-dates`),
 };
 
-export async function* chatStream(slug, sid, message, lang = "en") {
+export async function* chatStream(slug, sid, message, lang = "en", guestEmail = null) {
   const res = await fetch(`/api/properties/${slug}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sid, message, lang }),
+    body: JSON.stringify({ session_id: sid, message, lang, ...(guestEmail ? { guest_email: guestEmail } : {}) }),
   });
 
   if (!res.ok) {

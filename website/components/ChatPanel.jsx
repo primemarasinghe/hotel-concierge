@@ -476,23 +476,18 @@ function buildCal(year, month) {
   return cells;
 }
 
-function DateRangePicker({ onSelect, onClose }) {
-  const todayIso = new Date().toISOString().slice(0, 10);
+function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
   const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const maxDate  = new Date(now); maxDate.setDate(now.getDate() + 13);
+  const maxIso   = maxDate.toISOString().slice(0, 10);
+  const blockedSet = new Set(blockedDates);
+
   const [vy, setVy] = useState(now.getFullYear());
   const [vm, setVm] = useState(now.getMonth());
   const [start, setStart] = useState(null);
   const [end,   setEnd]   = useState(null);
   const [hover, setHover] = useState(null);
-
-  function prevM() {
-    if (vm === 0) { setVy(y => y - 1); setVm(11); }
-    else setVm(m => m - 1);
-  }
-  function nextM() {
-    if (vm === 11) { setVy(y => y + 1); setVm(0); }
-    else setVm(m => m + 1);
-  }
 
   function pick(iso) {
     if (!start || end) {
@@ -513,30 +508,27 @@ function DateRangePicker({ onSelect, onClose }) {
   return (
     <div className="drp" role="dialog" aria-label="Pick date range">
       <div className="drp-nav">
-        <button type="button" className="drp-nav-btn" onClick={prevM} aria-label="Previous month">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
+        <span style={{ width: 28 }} />
         <span className="drp-month-label">{MONTH_NAMES[vm]} {vy}</span>
-        <button type="button" className="drp-nav-btn" onClick={nextM} aria-label="Next month">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+        <span style={{ width: 28 }} />
       </div>
 
       <div className="drp-grid">
         {DOW_LABELS.map(d => <div key={d} className="drp-dow">{d}</div>)}
         {cells.map((iso, idx) => {
           if (!iso) return <div key={`e${idx}`} className="drp-empty" />;
-          const past  = iso < todayIso;
+          const disabled = iso < todayIso || iso > maxIso || blockedSet.has(iso);
+          const isBlocked = blockedSet.has(iso) && iso >= todayIso && iso <= maxIso;
           const isSel = iso === start || iso === end;
           const inRng = rLo && rHi && iso > rLo && iso < rHi;
           return (
             <button
               key={iso}
               type="button"
-              disabled={past}
-              className={`drp-day${past ? " drp-past" : ""}${isSel ? " drp-sel" : ""}${inRng ? " drp-rng" : ""}`}
-              onClick={() => !past && pick(iso)}
-              onMouseEnter={() => start && !end && !past && setHover(iso)}
+              disabled={disabled}
+              className={`drp-day${disabled ? " drp-past" : ""}${isBlocked ? " drp-blocked" : ""}${isSel ? " drp-sel" : ""}${inRng ? " drp-rng" : ""}`}
+              onClick={() => !disabled && pick(iso)}
+              onMouseEnter={() => start && !end && !disabled && setHover(iso)}
               onMouseLeave={() => setHover(null)}
               aria-label={iso}
               aria-pressed={isSel}
@@ -668,7 +660,7 @@ function HistoryPanel({ sessions, currentSid, onSelect, onNewChat, onDelete }) {
   );
 }
 
-export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "", onOpenVoice = null }) {
+export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "", onOpenVoice = null, guestEmail = null }) {
   const [prop, setProp]         = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState("");
@@ -678,6 +670,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   const [lang, setLang]         = useState("en");
   const [pickerDismissedAtLength, setPickerDismissedAtLength] = useState(-1);
   const [historyCount, setHistoryCount] = useState(0);
+  const [blockedDates, setBlockedDates] = useState([]);
   const [showHistory,  setShowHistory]  = useState(false);
   const [sessions,     setSessions]     = useState([]);
   const [streamContent, setStreamContent] = useState("");
@@ -724,17 +717,43 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   useEffect(() => {
     let live = true;
     setProp(null); setError("");
-    const id = store.get(sessionKey) || newSessionId();
-    store.set(sessionKey, id);
-    setSid(id);
-    Promise.all([api.property(slug), api.history(slug, id).catch(() => ({ messages: [] }))])
-      .then(([p, h]) => {
+
+    async function init() {
+      // Logged-in guest: always resolve session server-side, never use another user's localStorage
+      let id = null;
+      if (guestEmail) {
+        try {
+          const { session_id } = await api.sessionByEmail(slug, guestEmail);
+          id = session_id || newSessionId(); // existing session or brand-new one
+        } catch {
+          id = newSessionId();
+        }
+        store.set(sessionKey, id); // keep localStorage in sync for this user
+      } else {
+        // Anonymous: use localStorage
+        id = store.get(sessionKey) || newSessionId();
+        store.set(sessionKey, id);
+      }
+      if (!live) return;
+      setSid(id);
+
+      try {
+        const [p, h, bd] = await Promise.all([
+          api.property(slug),
+          api.history(slug, id).catch(() => ({ messages: [] })),
+          api.blockedDates(slug).catch(() => ({ blocked: [] })),
+        ]);
         if (!live) return;
         setProp(p);
         setMessages(h.messages);
         setHistoryCount(h.messages.length);
-      })
-      .catch(() => live && setError("This property's assistant isn't available right now."));
+        setBlockedDates(bd.blocked || []);
+      } catch {
+        if (live) setError("This property's assistant isn't available right now.");
+      }
+    }
+
+    init();
     return () => { live = false; };
   }, [slug]); // eslint-disable-line
 
@@ -888,7 +907,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
     let gotDone    = false;
 
     try {
-      for await (const ev of chatStream(slug, sid, msg, lang)) {
+      for await (const ev of chatStream(slug, sid, msg, lang, guestEmail)) {
         if (ev.type === "token") {
           streamContentRef.current += ev.content;
           setStreamContent(streamContentRef.current);
@@ -1160,6 +1179,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             <DateRangePicker
               onSelect={applyDates}
               onClose={() => setPickerDismissedAtLength(messages.length)}
+              blockedDates={blockedDates}
             />
           </div>
         )}

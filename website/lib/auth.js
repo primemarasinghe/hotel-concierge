@@ -14,9 +14,6 @@ export const authOptions = {
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/book',
-  },
   callbacks: {
     async jwt({ token }) {
       token.isAdmin = ADMIN_EMAILS.includes((token.email || '').toLowerCase());

@@ -192,6 +192,7 @@ class Conversation(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)  # session id from the widget
     property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
+    guest_email: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     handoff_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     handoff_reason: Mapped[str] = mapped_column(Text, default="")
     booking_reference: Mapped[str | None] = mapped_column(String(20), nullable=True)
