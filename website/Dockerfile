@@ -10,6 +10,11 @@ COPY . .
 # NEXT_PUBLIC_* vars are baked at build time.
 # Leave NEXT_PUBLIC_API_URL empty so the client uses relative URLs,
 # which are proxied through Next.js rewrites to the backend service.
+# API_URL is server-side only — used by next.config.mjs rewrites, which are
+# evaluated at build time in standalone mode. Must point to the Docker service name.
+ENV API_URL=http://backend:8000
+# NEXT_PUBLIC_API_URL is baked into the client bundle. Leave empty so the
+# browser uses relative URLs, which Next.js proxies to the backend via rewrites.
 ENV NEXT_PUBLIC_API_URL=""
 ENV NEXTAUTH_URL=http://localhost:3001
 ENV NEXTAUTH_SECRET=placeholder-replaced-at-runtime
