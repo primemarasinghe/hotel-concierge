@@ -40,5 +40,17 @@ services:
     ports:
       - "8080:80"
 
+  website:
+    build: ./website
+    env_file: .env
+    environment:
+      API_URL: http://backend:8000
+      NEXTAUTH_URL: http://localhost:3001
+      ADMIN_EMAILS: primeshmarasingha@gmail.com
+    depends_on:
+      - backend
+    ports:
+      - "3001:3000"
+
 volumes:
   pgdata:

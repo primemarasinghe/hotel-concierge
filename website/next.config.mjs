@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   async rewrites() {
     const apiUrl = process.env.API_URL || 'http://localhost:8000';
     // Only proxy known backend prefixes — never touch /api/auth (NextAuth)
