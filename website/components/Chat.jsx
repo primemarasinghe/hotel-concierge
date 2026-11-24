@@ -34,9 +34,9 @@ function RichText({ text }) {
   );
 }
 
-function GuestForm({ onSend }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+function GuestForm({ onSend, prefill = {} }) {
+  const [name, setName] = useState(prefill.name ?? '');
+  const [email, setEmail] = useState(prefill.email ?? '');
   const [phone, setPhone] = useState('');
   const [errors, setErrors] = useState({});
   const [done, setDone] = useState(false);
@@ -91,11 +91,11 @@ function GuestForm({ onSend }) {
 const fmtMoney = (n, cur = 'LKR') =>
   `${cur} ${(+n).toLocaleString('en-LK', { minimumFractionDigits: 0 })}`;
 
-function EventCard({ ev, onSend }) {
+function EventCard({ ev, onSend, user }) {
   const d = ev.data || {};
 
   if (ev.type === 'guest_details_form') {
-    return <GuestForm onSend={onSend} />;
+    return <GuestForm onSend={onSend} prefill={user ?? {}} />;
   }
 
   if (ev.type === 'booking_created' || ev.type === 'booking_modified') {
@@ -241,7 +241,7 @@ const DEFAULT_SUGGESTIONS = [
   'View my booking',
 ];
 
-export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "Hello! I'm Siri 🙏 your AI concierge at Leisureville Sigiriya. How can I help you today?" }) {
+export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "Hello! I'm Siri 🙏 your AI concierge at Leisureville Sigiriya. How can I help you today?", user = null }) {
   const sidRef = useRef(newSid());
   const [messages, setMessages]       = useState([]);
   const [input, setInput]             = useState('');
@@ -365,7 +365,7 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
                 </div>
               )}
               {m.events?.map((ev, j) => (
-                <EventCard key={j} ev={ev} onSend={send} />
+                <EventCard key={j} ev={ev} onSend={send} user={user} />
               ))}
             </div>
           </div>
@@ -382,7 +382,7 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
                 </div>
               )}
               {streamEvents.map((ev, j) => (
-                <EventCard key={j} ev={ev} onSend={send} />
+                <EventCard key={j} ev={ev} onSend={send} user={user} />
               ))}
             </div>
           </div>
@@ -410,7 +410,7 @@ export default function Chat({ suggestions = DEFAULT_SUGGESTIONS, greeting = "He
       {/* Guest form injected above input */}
       {hasGuestForm && (
         <div style={{ padding: '0 16px 8px' }}>
-          <GuestForm onSend={send} />
+          <GuestForm onSend={send} prefill={user ?? {}} />
         </div>
       )}
 

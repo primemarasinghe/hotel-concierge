@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 
 const LINKS = [
   { href: '/',             label: 'Home' },
@@ -16,6 +17,7 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const isHome = pathname === '/';
+  const { data: session } = useSession();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -91,9 +93,42 @@ export default function Nav() {
               </Link>
             );
           })}
-          <Link href="/book" className="btn-primary" style={{ marginLeft: 8, padding: '10px 22px', fontSize: '0.85rem' }}>
-            Book Now
-          </Link>
+          {session ? (
+            <div style={{ marginLeft: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {session.user?.image ? (
+                <img
+                  src={session.user.image}
+                  alt={session.user.name ?? 'User'}
+                  width={32} height={32}
+                  style={{ borderRadius: '50%', border: '2px solid #E8DCC8', flexShrink: 0 }}
+                />
+              ) : (
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: '#F5EDD9', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.8rem', fontWeight: 700, color: '#8B6914', flexShrink: 0,
+                }}>
+                  {(session.user?.name ?? 'U')[0].toUpperCase()}
+                </div>
+              )}
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: '1.5px solid #E0D5C5',
+                  background: 'transparent', cursor: 'pointer',
+                  fontWeight: 500, fontSize: '0.85rem',
+                  color: solid ? '#2D1F0A' : '#FFFFFF',
+                  transition: 'color 0.2s, border-color 0.2s',
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <Link href="/book" className="btn-primary" style={{ marginLeft: 8, padding: '10px 22px', fontSize: '0.85rem' }}>
+              Book Now
+            </Link>
+          )}
         </nav>
 
         {/* Mobile hamburger */}
@@ -145,9 +180,28 @@ export default function Nav() {
               {label}
             </Link>
           ))}
-          <Link href="/book" className="btn-primary" style={{ marginTop: 16, display: 'inline-flex', fontSize: '0.95rem' }}>
-            Book Now
-          </Link>
+          {session ? (
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              {session.user?.image ? (
+                <img src={session.user.image} alt={session.user.name ?? 'User'} width={32} height={32} style={{ borderRadius: '50%' }} />
+              ) : (
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#F5EDD9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#8B6914' }}>
+                  {(session.user?.name ?? 'U')[0].toUpperCase()}
+                </div>
+              )}
+              <span style={{ fontSize: '0.9rem', color: '#6B5D4F', fontWeight: 500 }}>{session.user?.name}</span>
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                style={{ marginLeft: 'auto', padding: '8px 16px', borderRadius: 8, border: '1.5px solid #E0D5C5', background: 'transparent', cursor: 'pointer', fontWeight: 500, fontSize: '0.88rem', color: '#2D1F0A' }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <Link href="/book" className="btn-primary" style={{ marginTop: 16, display: 'inline-flex', fontSize: '0.95rem' }}>
+              Book Now
+            </Link>
+          )}
         </div>
       )}
 
