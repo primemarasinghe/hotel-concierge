@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { fetchRooms } from '../../lib/api';
+import AskConciergeButton from '../../components/AskConciergeButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Rooms — Leisureville Sigiriya' };
@@ -160,9 +161,10 @@ export default async function RoomsPage() {
             All rates are per room per night, subject to seasonal adjustments. Service charge 10%
             and government taxes 18% are additional. Weekend premium may apply.
           </p>
-          <Link href="/book" className="btn-primary">
-            Get an exact quote from Siri →
-          </Link>
+          <AskConciergeButton
+            message="I'd like to get an exact quote for a room"
+            label="Get an exact quote →"
+          />
         </div>
       </div>
     </>
