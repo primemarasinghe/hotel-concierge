@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { fetchRooms } from '../../lib/api';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Rooms — Leisureville Sigiriya' };
 
 async function getRooms() {

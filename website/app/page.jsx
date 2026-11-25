@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { fetchRooms, fetchExperiences } from '../lib/api';
 
+export const dynamic = 'force-dynamic';
+
 async function getData() {
   try {
     const [rooms, experiences] = await Promise.all([fetchRooms(), fetchExperiences()]);

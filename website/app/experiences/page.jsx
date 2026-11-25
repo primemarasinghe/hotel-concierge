@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { fetchExperiences } from '../../lib/api';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Experiences — Leisureville Sigiriya' };
 
 async function getExperiences() {
