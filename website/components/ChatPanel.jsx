@@ -489,6 +489,13 @@ function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
   const [end,   setEnd]   = useState(null);
   const [hover, setHover] = useState(null);
 
+  // Navigation: allow going back to current month, forward to the month that contains maxIso
+  const maxDateObj = new Date(maxIso);
+  const canPrev = vy > now.getFullYear() || (vy === now.getFullYear() && vm > now.getMonth());
+  const canNext = vy < maxDateObj.getFullYear() || (vy === maxDateObj.getFullYear() && vm < maxDateObj.getMonth());
+  function prevMonth() { if (vm === 0) { setVm(11); setVy(vy - 1); } else setVm(vm - 1); }
+  function nextMonth() { if (vm === 11) { setVm(0);  setVy(vy + 1); } else setVm(vm + 1); }
+
   function pick(iso) {
     if (!start || end) {
       setStart(iso); setEnd(null);
@@ -508,9 +515,13 @@ function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
   return (
     <div className="drp" role="dialog" aria-label="Pick date range">
       <div className="drp-nav">
-        <span style={{ width: 28 }} />
+        <button type="button" className="drp-nav-btn" onClick={prevMonth} disabled={!canPrev} aria-label="Previous month">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
         <span className="drp-month-label">{MONTH_NAMES[vm]} {vy}</span>
-        <span style={{ width: 28 }} />
+        <button type="button" className="drp-nav-btn" onClick={nextMonth} disabled={!canNext} aria-label="Next month">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
       </div>
 
       <div className="drp-grid">

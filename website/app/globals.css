@@ -1221,8 +1221,9 @@ details[open].avail-unavail summary::before { content: "− "; }
 .drp { padding: 12px 14px 10px; background: var(--surface); }
 @keyframes drpIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .drp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.drp-nav-btn { width: 28px; height: 28px; border: none; background: none; border-radius: 6px; color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none; }
-.drp-nav-btn:hover { background: var(--paper); color: var(--ink); }
+.drp-nav-btn { width: 28px; height: 28px; border: none; background: none; border-radius: 6px; color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none; cursor: pointer; }
+.drp-nav-btn:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
+.drp-nav-btn:disabled { opacity: 0.2; cursor: default; }
 .drp-month-label { font: 600 0.88rem/1 var(--ui); }
 .drp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; }
 .drp-dow { text-align: center; font: 600 0.7rem/1 var(--ui); color: var(--muted); padding: 3px 0 5px; }
@@ -3714,9 +3715,10 @@ details[open].avail-unavail summary::before { content: "− "; }
   border-radius: 6px;
   color: var(--muted);
   display: flex; align-items: center; justify-content: center;
-  flex: none;
+  flex: none; cursor: pointer;
 }
-.drp-nav-btn:hover { background: var(--paper); color: var(--ink); }
+.drp-nav-btn:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
+.drp-nav-btn:disabled { opacity: 0.2; cursor: default; }
 .drp-month-label { font: 600 0.88rem/1 var(--ui); }
 .drp-grid {
   display: grid;
