@@ -30,6 +30,7 @@ export const api = {
   sessionByEmail: (slug, email) =>
     request(`/api/properties/${slug}/chat/by-guest?email=${encodeURIComponent(email)}`),
   blockedDates: (slug) => request(`/api/properties/${slug}/blocked-dates`),
+  fullyBookedDates: (slug) => request(`/api/properties/${slug}/fully-booked-dates`),
 };
 
 export async function* chatStream(slug, sid, message, lang = "en", guestEmail = null) {

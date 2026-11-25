@@ -521,6 +521,26 @@ def public_blocked_dates(prop: Property = Depends(get_property), db: Session = D
     return {"blocked": [d.isoformat() for d in dates]}
 
 
+@app.get("/api/properties/{slug}/fully-booked-dates")
+def fully_booked_dates(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    """Return dates within the next 14 days where every room type has zero availability."""
+    today = date.today()
+    room_types = db.scalars(
+        select(RoomType).where(RoomType.property_id == prop.id)
+    ).all()
+    if not room_types:
+        return {"fully_booked": []}
+    fully_booked = []
+    current = today
+    while current <= today + timedelta(days=13):
+        next_day = current + timedelta(days=1)
+        total_free = sum(svc.units_available(db, rt, current, next_day) for rt in room_types)
+        if total_free == 0:
+            fully_booked.append(current.isoformat())
+        current = next_day
+    return {"fully_booked": fully_booked}
+
+
 @app.get("/api/properties/{slug}/chat/by-guest")
 def chat_by_guest(request: Request, email: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
     """Return the most recent conversation session_id for a logged-in guest, or null."""

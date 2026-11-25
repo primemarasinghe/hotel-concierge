@@ -300,9 +300,10 @@ function TransferOptionsCard({ data, onSend }) {
   );
 }
 
-function GuestDetailsCard({ onSend }) {
+function GuestDetailsCard({ onSend, guestEmail = null }) {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(guestEmail || "");
+  const [emailConfirm, setEmailConfirm] = useState(guestEmail || "");
   const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -311,6 +312,7 @@ function GuestDetailsCard({ onSend }) {
     const e = {};
     if (name.trim().length < 2) e.name = "Please enter your full name";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) e.email = "Please enter a valid email address";
+    else if (email.trim().toLowerCase() !== emailConfirm.trim().toLowerCase()) e.emailConfirm = "Emails do not match — please check for typos";
     if (phone.trim().replace(/[\s\-+()\d]/g, "").length > 0 || phone.trim().replace(/\D/g, "").length < 7) e.phone = "Please enter a valid phone number";
     return e;
   }
@@ -352,6 +354,14 @@ function GuestDetailsCard({ onSend }) {
         {errors.email && <span className="guest-form-error">{errors.email}</span>}
       </div>
       <div className="guest-form-field">
+        <label htmlFor="gf-email-confirm">Confirm email</label>
+        <input id="gf-email-confirm" type="email" autoComplete="off" value={emailConfirm}
+          onChange={(e) => setEmailConfirm(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="Re-enter your email" />
+        {errors.emailConfirm && <span className="guest-form-error">{errors.emailConfirm}</span>}
+      </div>
+      <div className="guest-form-field">
         <label htmlFor="gf-phone">Phone number</label>
         <input id="gf-phone" type="tel" autoComplete="tel" value={phone}
           onChange={(e) => setPhone(e.target.value)}
@@ -366,7 +376,7 @@ function GuestDetailsCard({ onSend }) {
 
 const STATUS_LABEL = { pending: "Awaiting confirmation", confirmed: "Confirmed", cancelled: "Cancelled" };
 
-export function EventCard({ event, onSend = () => {} }) {
+export function EventCard({ event, onSend = () => {}, guestEmail = null }) {
   const d = event.data;
 
   if (event.type === "room_cards") {
@@ -382,7 +392,7 @@ export function EventCard({ event, onSend = () => {} }) {
     return <TransferOptionsCard data={d} onSend={onSend} />;
   }
   if (event.type === "guest_details_form") {
-    return <GuestDetailsCard onSend={onSend} />;
+    return <GuestDetailsCard onSend={onSend} guestEmail={guestEmail} />;
   }
 
   if (event.type === "booking_created" || event.type === "booking_modified") {
@@ -476,12 +486,13 @@ function buildCal(year, month) {
   return cells;
 }
 
-function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
+function DateRangePicker({ onSelect, onClose, blockedDates = [], fullyBookedDates = [] }) {
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
   const maxDate  = new Date(now); maxDate.setDate(now.getDate() + 13);
   const maxIso   = maxDate.toISOString().slice(0, 10);
-  const blockedSet = new Set(blockedDates);
+  const blockedSet    = new Set(blockedDates);
+  const fullyBookedSet = new Set(fullyBookedDates);
 
   const [vy, setVy] = useState(now.getFullYear());
   const [vm, setVm] = useState(now.getMonth());
@@ -528,8 +539,9 @@ function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
         {DOW_LABELS.map(d => <div key={d} className="drp-dow">{d}</div>)}
         {cells.map((iso, idx) => {
           if (!iso) return <div key={`e${idx}`} className="drp-empty" />;
-          const disabled = iso < todayIso || iso > maxIso || blockedSet.has(iso);
-          const isBlocked = blockedSet.has(iso) && iso >= todayIso && iso <= maxIso;
+          const isFullyBooked = fullyBookedSet.has(iso) && iso >= todayIso && iso <= maxIso;
+          const isBlocked     = blockedSet.has(iso)     && iso >= todayIso && iso <= maxIso;
+          const disabled = iso < todayIso || iso > maxIso || isBlocked || isFullyBooked;
           const isSel = iso === start || iso === end;
           const inRng = rLo && rHi && iso > rLo && iso < rHi;
           return (
@@ -537,7 +549,7 @@ function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
               key={iso}
               type="button"
               disabled={disabled}
-              className={`drp-day${disabled ? " drp-past" : ""}${isBlocked ? " drp-blocked" : ""}${isSel ? " drp-sel" : ""}${inRng ? " drp-rng" : ""}`}
+              className={`drp-day${disabled && !isBlocked && !isFullyBooked ? " drp-past" : ""}${isBlocked ? " drp-blocked" : ""}${isFullyBooked ? " drp-full" : ""}${isSel ? " drp-sel" : ""}${inRng ? " drp-rng" : ""}`}
               onClick={() => !disabled && pick(iso)}
               onMouseEnter={() => start && !end && !disabled && setHover(iso)}
               onMouseLeave={() => setHover(null)}
@@ -548,6 +560,11 @@ function DateRangePicker({ onSelect, onClose, blockedDates = [] }) {
             </button>
           );
         })}
+      </div>
+
+      <div className="drp-legend">
+        <span className="drp-legend-item"><span className="drp-legend-dot drp-legend-full" />Fully booked</span>
+        <span className="drp-legend-item"><span className="drp-legend-dot drp-legend-blocked" />Unavailable</span>
       </div>
 
       <div className="drp-footer">
@@ -681,7 +698,8 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   const [lang, setLang]         = useState("en");
   const [pickerDismissedAtLength, setPickerDismissedAtLength] = useState(-1);
   const [historyCount, setHistoryCount] = useState(0);
-  const [blockedDates, setBlockedDates] = useState([]);
+  const [blockedDates,     setBlockedDates]     = useState([]);
+  const [fullyBookedDates, setFullyBookedDates] = useState([]);
   const [showHistory,  setShowHistory]  = useState(false);
   const [sessions,     setSessions]     = useState([]);
   const [streamContent, setStreamContent] = useState("");
@@ -749,16 +767,18 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
       setSid(id);
 
       try {
-        const [p, h, bd] = await Promise.all([
+        const [p, h, bd, fb] = await Promise.all([
           api.property(slug),
           api.history(slug, id).catch(() => ({ messages: [] })),
           api.blockedDates(slug).catch(() => ({ blocked: [] })),
+          api.fullyBookedDates(slug).catch(() => ({ fully_booked: [] })),
         ]);
         if (!live) return;
         setProp(p);
         setMessages(h.messages);
         setHistoryCount(h.messages.length);
         setBlockedDates(bd.blocked || []);
+        setFullyBookedDates(fb.fully_booked || []);
       } catch {
         if (live) setError("This property's assistant isn't available right now.");
       }
@@ -1154,7 +1174,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
                   {m.role === "assistant" ? <RichText text={m.content} /> : <p>{m.content}</p>}
                 </div>
               )}
-              {m.events?.map((e, j) => <EventCard key={j} event={e} onSend={send} />)}
+              {m.events?.map((e, j) => <EventCard key={j} event={e} onSend={send} guestEmail={guestEmail} />)}
             </div>
             {m.role === "user" && <UserAvatar />}
           </div>
@@ -1169,7 +1189,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
                   <RichText text={streamContent} />
                 </div>
               )}
-              {streamEvents.map((e, j) => <EventCard key={j} event={e} onSend={send} />)}
+              {streamEvents.map((e, j) => <EventCard key={j} event={e} onSend={send} guestEmail={guestEmail} />)}
             </div>
           </div>
         )}
@@ -1191,6 +1211,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
               onSelect={applyDates}
               onClose={() => setPickerDismissedAtLength(messages.length)}
               blockedDates={blockedDates}
+              fullyBookedDates={fullyBookedDates}
             />
           </div>
         )}
