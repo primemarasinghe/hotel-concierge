@@ -15,6 +15,7 @@ export default function ChatWidget() {
   const { data: session, status } = useSession();
   const [open,      setOpen]      = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [pendingMsg, setPendingMsg] = useState("");
 
   // Redirect admin users to the admin panel immediately after login
   useEffect(() => {
@@ -35,9 +36,12 @@ export default function ChatWidget() {
     }
   }, []);
 
-  // Open on custom event from "Book Now" button
+  // Open on custom event (from "Book Now" or "Ask about this" buttons)
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = (e) => {
+      setPendingMsg(e.detail?.message || "");
+      setOpen(true);
+    };
     window.addEventListener('openChatWidget', handler);
     return () => window.removeEventListener('openChatWidget', handler);
   }, []);
@@ -149,10 +153,11 @@ export default function ChatWidget() {
             /* ── Chat panel ── */
             <ChatPanel
               slug={SLUG}
-              onClose={() => setOpen(false)}
+              onClose={() => { setOpen(false); setPendingMsg(""); }}
               fill={false}
               onOpenVoice={() => { setOpen(false); setVoiceOpen(true); }}
               guestEmail={session?.user?.email ?? null}
+              initialMessage={pendingMsg}
             />
           )}
         </div>

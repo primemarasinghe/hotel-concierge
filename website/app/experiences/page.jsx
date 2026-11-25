@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { fetchExperiences } from '../../lib/api';
+import AskConciergeButton from '../../components/AskConciergeButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Experiences — Leisureville Sigiriya' };
@@ -78,17 +79,10 @@ function ExperienceCard({ exp }) {
         </div>
       )}
 
-      <Link
-        href="/book"
-        style={{
-          display: 'inline-block', padding: '10px 16px', background: 'transparent',
-          border: '1.5px solid #E8DCC8', borderRadius: 10, fontSize: '0.82rem',
-          fontWeight: 600, color: '#8B6914', textDecoration: 'none',
-          fontFamily: '"Plus Jakarta Sans", sans-serif',
-        }}
-      >
-        Ask Siri about this →
-      </Link>
+      <AskConciergeButton
+        message={`Tell me more about the "${exp.name}" experience`}
+        label="Ask our concierge →"
+      />
     </div>
   );
 }
