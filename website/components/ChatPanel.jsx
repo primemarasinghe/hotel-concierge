@@ -311,8 +311,12 @@ function GuestDetailsCard({ onSend, guestEmail = null }) {
   function validate() {
     const e = {};
     if (name.trim().length < 2) e.name = "Please enter your full name";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) e.email = "Please enter a valid email address";
-    else if (email.trim().toLowerCase() !== emailConfirm.trim().toLowerCase()) e.emailConfirm = "Emails do not match — please check for typos";
+    const emailVal = email.trim().toLowerCase();
+    const tld = (emailVal.match(/\.([a-z]+)$/) || [])[1] || "";
+    const TLD_TYPOS = { con: "com", cmo: "com", ocm: "com", cpm: "com", coim: "com", vom: "com", nte: "net", og: "org" };
+    if (!/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(emailVal)) e.email = "Please enter a valid email address";
+    else if (TLD_TYPOS[tld]) e.email = `Did you mean .${TLD_TYPOS[tld]}? Please check your email address.`;
+    else if (emailVal !== emailConfirm.trim().toLowerCase()) e.emailConfirm = "Emails do not match — please check for typos";
     if (phone.trim().replace(/[\s\-+()\d]/g, "").length > 0 || phone.trim().replace(/\D/g, "").length < 7) e.phone = "Please enter a valid phone number";
     return e;
   }
