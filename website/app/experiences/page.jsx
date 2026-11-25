@@ -78,17 +78,17 @@ function ExperienceCard({ exp }) {
         </div>
       )}
 
-      <button
+      <Link
+        href="/book"
         style={{
-          padding: '10px 16px', background: 'transparent', border: '1.5px solid #E8DCC8',
-          borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, color: '#8B6914',
-          cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s, border-color 0.15s',
+          display: 'inline-block', padding: '10px 16px', background: 'transparent',
+          border: '1.5px solid #E8DCC8', borderRadius: 10, fontSize: '0.82rem',
+          fontWeight: 600, color: '#8B6914', textDecoration: 'none',
           fontFamily: '"Plus Jakarta Sans", sans-serif',
         }}
-        onClick={() => {}}
       >
         Ask Siri about this →
-      </button>
+      </Link>
     </div>
   );
 }
