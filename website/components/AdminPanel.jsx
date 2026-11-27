@@ -4141,7 +4141,6 @@ const NAV_GROUPS = [
     ["blocked",       "Blocked Dates", "M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"],
     ["seasons",       "Seasons",       "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"],
     ["experiences",   "Experiences",   "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"],
-    ["promos",        "Promos",        "M9 14l6-6M9.5 8.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM14.5 13.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zM21 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
     ["kb",            "Knowledge",     "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"],
   ]},
   { label: "Settings", items: [
@@ -4314,7 +4313,6 @@ export default function AdminPanel({ user }) {
           {slug && tab === "transfers"     && <TransfersHub     a={a} slug={slug} currency={currency} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "experiences"   && <Experiences      a={a} slug={slug} currency={currency} toast={toast}/>}
           {slug && tab === "conversations" && <Conversations    a={a} slug={slug} onChange={refreshBadges} onViewBooking={ref => { setBookingJump(ref); setTab("bookings"); }}/>}
-          {slug && tab === "promos"        && <PromoCodes       a={a} slug={slug} toast={toast}/>}
           {slug && tab === "requests"      && <ServiceRequests  a={a} slug={slug} toast={toast} onRefresh={refreshBadges}/>}
           {slug && tab === "kb"            && <KnowledgeBase    a={a} slug={slug} toast={toast}/>}
           {slug && tab === "rooms"         && <Rooms            a={a} slug={slug} toast={toast} currency={currency}/>}

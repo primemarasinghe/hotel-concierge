@@ -25,7 +25,6 @@ class StayArgs(BaseModel):
 class QuoteArgs(StayArgs):
     room_type_code: str
     units: int = Field(1, ge=1, description="Number of rooms/units")
-    promo_code: Optional[str] = Field(None, description="Promo/discount code if the guest provided one")
 
 
 class CreateArgs(QuoteArgs):
@@ -33,13 +32,7 @@ class CreateArgs(QuoteArgs):
     email: str
     phone: str
     special_requests: str = ""
-    promo_code: Optional[str] = Field(None, description="Promo code to apply (pass if guest provided one and it was validated)")
     guest_confirmed: bool = Field(description="True ONLY after the guest explicitly said yes to the full summary incl. total price")
-
-
-class PromoCodeArgs(BaseModel):
-    code: str = Field(description="The promo/discount code the guest provided")
-    nights: int = Field(ge=1, description="Number of nights (needed to check minimum stay requirement)")
 
 
 class LookupArgs(BaseModel):
@@ -167,21 +160,11 @@ class ConciergeAgent:
                 }
         return {"rooms": rooms_out, "upsell": upsell}
 
-    def _validate_promo_code(self, code: str, nights: int):
-        try:
-            pc = svc.validate_promo(self.db, self.prop, code, nights)
-            disc = (f"{pc.discount_value}% off" if pc.discount_type == "pct"
-                    else f"{self.prop.currency} {pc.discount_value:,.0f} off")
-            return {"valid": True, "code": pc.code, "discount": disc,
-                    "description": pc.description or disc}
-        except svc.BookingError as e:
-            return {"valid": False, "error": str(e)}
-
-    def _get_quote(self, room_type_code, check_in, check_out, adults, children=0, units=1, meal_plan="RO", promo_code=None):
+    def _get_quote(self, room_type_code, check_in, check_out, adults, children=0, units=1, meal_plan="RO"):
         rt = svc.room_type_by_code(self.db, self.prop, room_type_code)
         svc.validate_stay(self.prop, _d(check_in), _d(check_out))
         svc.validate_occupancy(rt, adults, children, units)
-        q = svc.quote(self.db, self.prop, rt, _d(check_in), _d(check_out), adults, children, units, meal_plan, promo_code)
+        q = svc.quote(self.db, self.prop, rt, _d(check_in), _d(check_out), adults, children, units, meal_plan)
         q["units_free"] = svc.units_available(self.db, rt, _d(check_in), _d(check_out))
         nights = (_d(check_out) - _d(check_in)).days
         self.events.append({
@@ -298,15 +281,14 @@ class ConciergeAgent:
             ("list_room_types", self._list_room_types, NoArgs, "Room/unit types with descriptions, capacity, amenities and starting rates."),
             ("search_knowledge", self._search_knowledge, KnowledgeArgs, "Search property FAQs, policies, facilities, dining, location and directions."),
             ("check_availability", self._check_availability, StayArgs, "Check which room types are free for dates and party size, with total prices."),
-            ("get_quote", self._get_quote, QuoteArgs, "Detailed price breakdown for a specific room type and stay. Pass promo_code if the guest has one."),
-            ("validate_promo_code", self._validate_promo_code, PromoCodeArgs, "Check whether a promo/discount code is valid for the stay length. Call this when a guest mentions a promo code."),
-            ("create_reservation", self._create_reservation, CreateArgs, "Create a reservation (status pending until staff confirm). Pass promo_code if one was validated."),
+            ("get_quote", self._get_quote, QuoteArgs, "Detailed price breakdown for a specific room type and stay."),
+            ("create_reservation", self._create_reservation, CreateArgs, "Create a reservation (status pending until staff confirm)."),
             ("lookup_reservation", self._lookup_reservation, LookupArgs, "Find an existing reservation by reference + email."),
             ("modify_reservation", self._modify_reservation, ModifyArgs, "Change dates, guests, meal plan or special requests on a reservation."),
             ("cancel_reservation", self._cancel_reservation, CancelArgs, "Cancel a reservation."),
             ("list_transfer_options", self._list_transfer_options, TransferListArgs, "Airport/transfer routes, vehicles and prices."),
             ("book_transfer", self._book_transfer, TransferArgs, "Request an airport or other transfer."),
-            ("recommend_experiences", self._recommend_experiences, ExperienceArgs, "Suggest tours, dining and activities matched to guest interests."),
+            ("recommend_experiences", self._recommend_experiences, ExperienceArgs, "Share information about nearby attractions, tours and activities around the property. These are independent local experiences — the hotel does not book or sell them. Only provide details (name, description, duration, what to expect). Never mention prices or offer to book them."),
             ("request_guest_details", self._request_guest_details, NoArgs, "Show the guest a form to enter their name, email and phone number. Call this instead of asking for those details in text."),
             ("request_human", self._request_human, HandoffArgs, "Flag the conversation for staff follow-up (complaints, special cases, anything you can't resolve)."),
             ("log_service_request", self._log_service_request, ServiceRequestArgs, "Log an in-stay service request (housekeeping, room service, maintenance, late checkout, wake-up call, etc.). Only call this once you know the guest's name. Pass booking_reference if available so staff know which room to attend."),
@@ -349,52 +331,40 @@ Key vocabulary: room=කාමරය · nights=රාත්‍රි · adults=�
   confirm=තහවුරු කිරීම · cancel=අවලංගු කිරීම · available=ලබාගත හැකිය
   special requests=විශේෂ ඉල්ලීම් · reference number=යොමු අංකය
 """
-        tamil_section = """
-Tamil language support: Many guests are Tamil-speaking Sri Lankans and may write in Tamil script
-(தமிழ்) or in "Tanglish" — romanised Tamil in English letters, e.g. "room irukka", "vilai enna",
-"booking pannanum", "transfer venum", "cancel pannuven".
-- Guest writes Tamil script → reply fully in natural, warm Tamil script.
-- Guest writes Tanglish → reply in clear Tamil script (NOT Tanglish back).
-- Guest writes English → reply in English.
-- Guest mixes languages → match their dominant language.
-Use "நீங்கள்" (formal) unless the guest uses informal style. Keep replies brief.
-Key vocabulary: room=அறை · nights=இரவுகள் · adults=பெரியவர்கள் · children=குழந்தைகள்
-  check-in=வரும் தேதி · check-out=செல்லும் தேதி · rate/price=விலை · total=மொத்தம்
-  transfer=போக்குவரத்து · breakfast=காலை உணவு · booking=முன்பதிவு
-  confirm=உறுதிப்படுத்து · cancel=ரத்து செய் · available=கிடைக்கும்
-  special requests=சிறப்பு வேண்டுகோள்கள் · reference number=குறிப்பு எண்
-"""
-
         lang_override = {
-            "en": "LANGUAGE OVERRIDE: The guest's UI is set to English. You MUST reply in English for every message in this conversation, regardless of conversation history or the language the guest writes in.",
-            "si": "LANGUAGE OVERRIDE: The guest's UI is set to Sinhala (සිංහල). You MUST reply fully in Sinhala script for every message in this conversation, regardless of conversation history.",
-            "ta": "LANGUAGE OVERRIDE: The guest's UI is set to Tamil (தமிழ்). You MUST reply fully in Tamil script for every message in this conversation, regardless of conversation history.",
+            "en": "LANGUAGE RULE: Respond in English.",
+            "si": "ABSOLUTE LANGUAGE RULE — NEVER BREAK THIS: Every single text response you write MUST be in Sinhala script (සිංහල). This is non-negotiable. It does NOT matter what language the guest types in, what language the tool results are in, or what language dates/room names/numbers are written in. Tool results are internal data — read them silently and always write your reply to the guest in Sinhala. Even short replies like 'Here are the available rooms:' MUST be in Sinhala: 'මෙන්න ලබාගත හැකි කාමර:'. Never produce an English sentence in your response.",
         }.get(lang, "")
+
+        lang_note = " Always reply in Sinhala (සිංහල)." if lang == "si" else ""
 
         return f"""{lang_override}
 
 You are Chat Bot, the AI concierge and reservations assistant for {p.name}, a {p.kind} in {p.location}.
-Tone: {p.tone}. Reply in the guest's language. Keep messages short and easy to read on a phone.
-{sinhala_section}{tamil_section}
+Tone: {p.tone}.{lang_note} Keep messages short and easy to read on a phone.
+{sinhala_section}
 
 Today is {today:%A, %d %B %Y} (property time zone {p.timezone}). Resolve relative dates ("next Friday", "this weekend") from today and state the exact dates back to the guest.
 Currency: {p.currency}. Check-in from {p.check_in_time}, check-out by {p.check_out_time}. Meal plans: {meals}.
 Free cancellation up to {p.free_cancellation_days} days before arrival. Prices include service charge and taxes as quoted by the tools.
 
-What you can do: answer questions about rooms, facilities and policies; check availability; quote rates; create, look up, change and cancel reservations; arrange airport transfers; recommend local experiences.
+What you can do: answer questions about rooms, facilities and policies; check availability; quote rates; create, look up, change and cancel reservations; arrange airport transfers; share information about nearby attractions and experiences around the property.
+
+Experiences policy: The hotel does NOT provide, book, or sell tours or activities. The experiences listed are independent nearby attractions guests can explore on their own or arrange locally. When asked about experiences, describe what they are, how long they take, and what to expect — but never mention prices, never offer to book them, and never imply the hotel organises them. If a guest asks who to contact for booking an experience, say they can arrange it locally on arrival or ask the caretaker for guidance.
 
 Rules:
 1. Never invent prices, availability, policies or facilities. Use tools for all of these; for facility/policy questions use search_knowledge. If a tool has no answer, say so and offer request_human.
 2. Before check_availability you need check-in, check-out and number of adults (and children if any). Ask only for what's missing.
 3. Reservation confirmation flow — follow this EXACTLY and do not deviate:
+   IMPORTANT: Messages from the UI like "I'd like to book the [Room]...", "Please go ahead and book the...", and "Name: ... Email: ... Phone: ..." are always generated in English by the system — they are NOT a signal to switch languages. Always reply to them in the current language.
    Step A. Collect information in this strict order:
-     A1. If you do not have check-in and check-out dates, ask for DATES ONLY in a single short message — nothing else. Example: "What dates are you thinking? I'll check what's available for you." Do not ask for name, email, room type, or guest count yet.
-     A2. Once you have dates (and guest count if already mentioned), call check_availability immediately. The availability card is shown automatically — the guest can already see all room names, prices, and details in the card. NEVER repeat room names, prices, bed types, or room descriptions in your text. NEVER ask "Which room would you like?" — the card already has Select buttons. ONE brief sentence only (e.g. "Here are the available rooms:"). Do NOT ask for name, email, or phone here.
-     A3. When the guest selects a room (you receive a message like "I'd like to book the [Room]..."), that is room selection only — NOT a booking confirmation. The guest details form appears automatically in the chat — do NOT ask for name, email, or phone in your text reply. Reply with ONE brief acknowledgment line only (e.g. "Great choice! Just fill in your details below.").
-   Step B. Once you have dates, room type, guest count, name, email, and phone — call get_quote FIRST, then reply. NEVER say "Shall I confirm this booking?" without calling get_quote in this same response. The booking summary card is shown automatically — do NOT repeat any details in text. Your entire text reply must be ONLY: "Shall I confirm this booking?"
-   Step C. When the guest replies "yes", "confirm", "go ahead", "book it", or clicks the confirm button — call create_reservation with guest_confirmed=true IMMEDIATELY. No extra steps.
+     A1. If you do not have check-in and check-out dates, ask for DATES ONLY in a single short message — nothing else. Do not ask for name, email, room type, or guest count yet.
+     A2. Once you have dates (and guest count if already mentioned), call check_availability immediately. The availability card is shown automatically — the guest can already see all room names, prices, and details in the card. NEVER repeat room names, prices, bed types, or room descriptions in your text. ONE brief sentence only — in Sinhala mode say "මෙන්න ලබාගත හැකි කාමර:". Do NOT ask for name, email, or phone here.
+     A3. When the guest selects a room (you receive a message like "I'd like to book the [Room]..."), that is room selection only — NOT a booking confirmation. The guest details form appears automatically in the chat — do NOT ask for name, email, or phone in your text reply. Reply with ONE brief acknowledgment line only — in Sinhala mode say "හොඳ තේරීමක්! කරුණාකර පහත විස්තර පුරවන්න.".
+   Step B. Once you have dates, room type, guest count, name, email, and phone — call get_quote FIRST, then reply. The booking summary card is shown automatically — do NOT repeat any details in text. Your entire text reply must be ONLY the confirmation question — in Sinhala mode say "මෙම වෙන්කිරීම තහවුරු කරන්නද?", in English say "Shall I confirm this booking?"
+   Step C. When the guest replies "yes", "ඔව්", "confirm", "go ahead", "book it", or clicks the confirm button — call create_reservation with guest_confirmed=true IMMEDIATELY. No extra steps.
    CRITICAL: Do NOT call check_availability or get_quote again after you already have the results for those dates. You have the prices — use them. Calling check_availability a second time for the same dates is wrong and must never happen.
-4. After create_reservation succeeds, a booking confirmation card is shown automatically with all details. Your text reply must be ONLY the booking reference number, e.g. "LV-XXXXXX — the team will email you to confirm." Do NOT list room, dates, price or any other detail in text.
+4. After create_reservation succeeds, a booking confirmation card is shown automatically with all details. Your text reply must be ONLY the booking reference number, e.g. "LV-XXXXXX — the team will email you to confirm." In Sinhala mode: "LV-XXXXXX — කණ්ඩායම ඔබට email කරනු ඇත." Do NOT list room, dates, price or any other detail in text.
 5. To view, change or cancel a booking you need its reference and the email on the booking.
 6. Never ask for or accept card numbers, passwords or ID numbers in chat. If a guest shares card details, tell them not to and that payment is handled securely by the team.
 7. For complaints, emergencies, group bookings over 5 rooms, or anything outside your tools, use request_human and share the contact details.
@@ -403,9 +373,6 @@ Rules:
 Upsell rules:
 14. After check_availability, the result contains a top-level "upsell" field. If "upsell" is present and non-null, add exactly ONE upsell sentence: "Worth considering: the [upsell.name] is just [upsell.diff] more per night and adds [single most compelling benefit from the room description]." If "upsell" is null or absent, do NOT add any upsell text — not even a zero-difference line. Never calculate prices yourself. Do this only once per availability search, and skip entirely if: the guest already specified a room type by name, or you are in the booking confirmation flow (Step B or C).
 15. Never upsell to the most expensive room if the guest has mentioned budget or price concerns. In that case, stay silent on upgrades.
-
-Promo code rules:
-16. When a guest mentions a promo or discount code, call validate_promo_code(code, nights) as soon as you know the number of nights. If valid, pass the same code to get_quote and then create_reservation so the discount is applied and stored. In the booking summary clearly show the saving, e.g. "Code LV10 saves you LKR 1,000". If invalid, tell the guest politely and offer to continue without it.
 
 Transfer rules:
 9. ALWAYS call list_transfer_options FIRST whenever a guest asks about transfers, airport pickups, or getting to/from the property — even if they seem ready to book. Never skip straight to collecting booking details. Show options first so the guest can choose a vehicle.
@@ -420,6 +387,8 @@ In-stay service rules:
     b. If the guest cannot find their reference, accept their name plus check-in date as an alternative identifier — pass whatever you have to the tool.
     c. Once you have the guest's name (and ideally their booking reference), call log_service_request IMMEDIATELY — do NOT ask "shall I log this?" or any other confirmation. The guest already asked; just do it.
     d. After the tool returns, tell the guest warmly that the request has been logged and the team will attend to it shortly, quoting the reference number.
+
+FINAL REMINDER — {"You MUST write every reply in Sinhala script (සිංහල). Tool results are in English — ignore that and always reply in Sinhala." if lang == "si" else "Reply in the guest's language."}
 """
 
     def _history(self) -> list:

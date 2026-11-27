@@ -218,7 +218,7 @@ function QuoteCard({ data, onSend }) {
       </div>
       <div className="quote-breakdown">
         <div className="quote-line">
-          <span>Room ({data.nights} nights × {data.units} unit{data.units > 1 ? "s" : ""})</span>
+          <span>Room ({data.nights} night{data.nights !== 1 ? "s" : ""} × {data.units} unit{data.units > 1 ? "s" : ""})</span>
           <span>{money(data.subtotal, data.currency)}</span>
         </div>
         {data.service_charge > 0 && (
@@ -633,12 +633,11 @@ function taGreeting(prop) {
   return `வணக்கம்! 🙏 நான் ${prop.assistant_name}, ${prop.name}-இன் AI concierge. அறை முன்பதிவு, விலை விவரங்கள், விமான நிலைய போக்குவரத்து மற்றும் அருகிலுள்ள இடங்கள் பற்றி உதவ முடியும். எப்படி உதவட்டுமா?`;
 }
 
-const LANG_CYCLE = { en: "si", si: "ta", ta: "en" };
-const LANG_LABEL = { en: "EN", si: "සිං", ta: "தமிழ்" };
+const LANG_CYCLE = { en: "si", si: "en" };
+const LANG_LABEL = { en: "EN", si: "සිං" };
 const LANG_TITLE = {
-  en: "සිංහලෙන් / தமிழில் — switch language",
-  si: "தமிழில் மாற",
-  ta: "Switch to English",
+  en: "සිංහලෙන් — switch language",
+  si: "Switch to English",
 };
 
 function HistoryPanel({ sessions, currentSid, onSelect, onNewChat, onDelete }) {
@@ -692,7 +691,7 @@ function HistoryPanel({ sessions, currentSid, onSelect, onNewChat, onDelete }) {
   );
 }
 
-export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "", onOpenVoice = null, guestEmail = null }) {
+export default function ChatPanel({ slug, onClose, fill = false, initialMessage = "", onOpenVoice = null, guestEmail = null, startFresh = false }) {
   const [prop, setProp]         = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState("");
@@ -730,7 +729,13 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
     if (busy || messages.length === 0 || messages.length === pickerDismissedAtLength) return false;
     const last = messages[messages.length - 1];
     if (!last || last.role !== "assistant") return false;
-    return /check[- ]?in|check[- ]?out|arrival date|which dates?|what dates?|when.*you.*think|when.*are you|when.*would you|when.*you.*like|what.*dates|dates.*thinking|dates.*have in mind|how many nights|looking to book|book for|your stay|planning to stay|thinking of staying/i.test(last.content || "");
+    const t = last.content || "";
+    const enMatch = /check[- ]?in|check[- ]?out|arrival date|which dates?|what dates?|when.*you.*think|when.*are you|when.*would you|when.*you.*like|what.*dates|dates.*thinking|dates.*have in mind|how many nights|looking to book|book for|your stay|planning to stay|thinking of staying/i.test(t);
+    // Sinhala: දිනය (date), ලඟාවෙන (arrival), රාත්‍රී/රාත්‍රි (nights), නවාතැන් (stay)
+    const siMatch = /දිනය|දිනයන්|ලඟාවෙන|රාත්‍රී|රාත්‍රි|නවාතැන්|ඇතුළත්|පිටවීම/.test(t);
+    // Tamil: தேதி (date), வருகை (arrival), புறப்பாடு (departure), இரவுகள் (nights)
+    const taMatch = /தேதி|தேதிகள்|வருகை|புறப்பாடு|இரவுகள்|தங்கும்/.test(t);
+    return enMatch || siMatch || taMatch;
   })();
 
   const needsGuestForm = (() => {
@@ -754,7 +759,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
     async function init() {
       // Logged-in guest: always resolve session server-side, never use another user's localStorage
       let id = null;
-      if (guestEmail) {
+      if (guestEmail && !startFresh) {
         try {
           const { session_id } = await api.sessionByEmail(slug, guestEmail);
           id = session_id || newSessionId(); // existing session or brand-new one
@@ -763,8 +768,8 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
         }
         store.set(sessionKey, id); // keep localStorage in sync for this user
       } else {
-        // Anonymous: use localStorage
-        id = store.get(sessionKey) || newSessionId();
+        // Anonymous OR fresh session requested — always start new
+        id = newSessionId();
         store.set(sessionKey, id);
       }
       if (!live) return;
@@ -1014,8 +1019,10 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
 
   function applyDates(ci, co) {
     const nights = Math.round((new Date(co) - new Date(ci)) / 86400000);
-    const text = `${fmtDate(ci, { day: "numeric", month: "short" })} – ${fmtDate(co, { day: "numeric", month: "short" })} (${nights} night${nights !== 1 ? "s" : ""})`;
-    send(text);
+    const dateStr = `${fmtDate(ci, { day: "numeric", month: "short" })} – ${fmtDate(co, { day: "numeric", month: "short" })} (${nights} night${nights !== 1 ? "s" : ""})`;
+    // Append a Sinhala/Tamil label so the backend doesn't mistake the English date as a language switch
+    const prefix = lang === "si" ? "තෝරාගත් දිනයන්: " : "";
+    send(prefix + dateStr);
   }
 
   function restart() {
@@ -1076,8 +1083,8 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
 
   const accent       = prop?.accent || "#2f5d3a";
   const initials     = (prop?.assistant_name || "C")[0];
-  const chips    = lang === "si" ? SI_CHIPS : lang === "ta" ? TA_CHIPS : (prop?.suggestions || []);
-  const greeting = prop ? (lang === "si" ? siGreeting(prop) : lang === "ta" ? taGreeting(prop) : prop.greeting) : null;
+  const chips    = lang === "si" ? SI_CHIPS : (prop?.suggestions || []);
+  const greeting = prop ? (lang === "si" ? siGreeting(prop) : prop.greeting) : null;
 
   const panel = (
     <section
@@ -1257,7 +1264,6 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             maxLength={2000}
             placeholder={
               lang === "si" ? "ලියන්න… (සිංහල හෝ ඉංග්‍රීසි)" :
-              lang === "ta" ? "தட்டச்சு செய்யுங்கள்… (தமிழ் அல்லது ஆங்கிலம்)" :
               "Ask about rooms, dates, transfers…"
             }
             aria-label="Your message"

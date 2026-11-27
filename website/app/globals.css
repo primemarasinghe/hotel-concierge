@@ -96,6 +96,76 @@ body {
   transform: translateY(-2px);
 }
 
+/* ── Experience hover cards ─────────────────────────────── */
+.exp-card {
+  background: #fff;
+  border: 1px solid #E8DCC8;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.3s, transform 0.3s;
+  cursor: default;
+}
+.exp-card:hover {
+  box-shadow: 0 20px 48px rgba(139,105,20,0.18);
+  transform: translateY(-8px);
+}
+.exp-header {
+  position: relative;
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: filter 0.3s;
+  overflow: hidden;
+}
+.exp-card:hover .exp-header {
+  filter: brightness(1.12);
+}
+.exp-header-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s;
+}
+.exp-card:hover .exp-header-icon {
+  transform: scale(1.1);
+}
+.exp-body {
+  padding: 22px 22px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.exp-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 22px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s, transform 0.25s;
+  border-top: 1px solid transparent;
+  margin-top: auto;
+}
+.exp-card:hover .exp-link {
+  opacity: 1;
+  transform: translateY(0);
+  border-top-color: var(--border);
+}
+
 /* ── Buttons ────────────────────────────────────────────── */
 .btn-primary {
   display: inline-flex;
@@ -1217,7 +1287,7 @@ details[open].avail-unavail summary::before { content: "− "; }
 .guest-form-done { display: flex; align-items: center; gap: 7px; font: 500 0.85rem/1 var(--ui); color: var(--muted); padding: 10px 14px; }
 
 /* ---------- Date range picker ---------- */
-.chat-inline-picker { align-self: flex-start; max-width: 300px; width: calc(100% - 48px); margin: 4px 0 4px 36px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; animation: drpIn 0.2s cubic-bezier(0.25, 1, 0.5, 1) both; }
+.chat-inline-picker { align-self: flex-start; max-width: 300px; width: calc(100% - 48px); margin: 4px 0 4px 36px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); animation: drpIn 0.2s cubic-bezier(0.25, 1, 0.5, 1) both; }
 .drp { padding: 12px 14px 10px; background: var(--surface); }
 @keyframes drpIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .drp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -3698,7 +3768,6 @@ details[open].avail-unavail summary::before { content: "− "; }
   border: 1.5px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
-  overflow: hidden;
   animation: drpIn 0.2s cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 .drp {
@@ -6448,3 +6517,10 @@ details[open].avail-unavail summary::before { content: "− "; }
 .exp-family-pill { background: #dcfce7; color: #15803d; font-size: 11px; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
 .exp-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #374151; padding: 8px 0; }
 .exp-toggle input { width: 16px; height: 16px; cursor: pointer; }
+
+.exp-nearby-card { transition: box-shadow 0.2s, transform 0.2s; }
+.exp-nearby-card:hover { box-shadow: 0 8px 32px rgba(45,31,10,0.12); transform: translateY(-3px); }
+
+.exp-img-card { transition: box-shadow 0.3s, transform 0.3s; }
+.exp-img-card:hover { box-shadow: 0 16px 48px rgba(45,31,10,0.16); transform: translateY(-5px); }
+.exp-img-card:hover .exp-img-card-photo { transform: scale(1.06) !important; }
