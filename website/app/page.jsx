@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { fetchRooms, fetchExperiences } from '../lib/api';
 import AskConciergeButton from '../components/AskConciergeButton';
+import ExperienceSlider from '../components/ExperienceSlider';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,41 +72,68 @@ function RoomCard({ room }) {
   );
 }
 
-function ExperienceCard({ exp }) {
-  const CAT = {
-    culture:   { bg: '#FEF9C3', text: '#854D0E', border: '#FDE68A' },
-    wildlife:  { bg: '#D1FAE5', text: '#065F46', border: '#A7F3D0' },
-    adventure: { bg: '#FEE2E2', text: '#991B1B', border: '#FCA5A5' },
-    wellness:  { bg: '#EDE9FE', text: '#5B21B6', border: '#DDD6FE' },
-  };
-  const c = CAT[exp.category] || { bg: '#F5EDD9', text: '#6B4F0F', border: '#E8D9B8' };
+const CAT_STYLES = {
+  culture:   { grad: 'linear-gradient(135deg,#92400e,#d97706)', badge: '#FEF9C3', badgeText: '#854D0E', badgeBorder: '#FDE68A',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="20" width="20" height="2"/><rect x="4" y="14" width="2" height="6"/><rect x="18" y="14" width="2" height="6"/><rect x="11" y="14" width="2" height="6"/><polygon points="12 2 2 12 22 12"/></svg> },
+  wildlife:  { grad: 'linear-gradient(135deg,#064e3b,#059669)', badge: '#D1FAE5', badgeText: '#065F46', badgeBorder: '#A7F3D0',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 19.07a1 1 0 0 0 1.42 1.4C7 19 7.5 18 9 18c2 0 3 1 5 1s3-1 4.5-1c1.5 0 2.5 1 3 1.5a1 1 0 0 0 1.5-1.3C20 15 19 10 17 8z"/><path d="M9.5 7.5A6.5 6.5 0 0 1 16 1c0 3.6-2.9 6.5-6.5 6.5z"/></svg> },
+  adventure: { grad: 'linear-gradient(135deg,#7f1d1d,#dc2626)', badge: '#FEE2E2', badgeText: '#991B1B', badgeBorder: '#FCA5A5',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 17 9 3 15 13 19 7 21 17"/></svg> },
+  wellness:  { grad: 'linear-gradient(135deg,#3730a3,#7c3aed)', badge: '#EDE9FE', badgeText: '#5B21B6', badgeBorder: '#DDD6FE',
+    icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> },
+};
+const CAT_DEFAULT = { grad: 'linear-gradient(135deg,#2D1F0A,#8B6914)', badge: '#F5EDD9', badgeText: '#6B4F0F', badgeBorder: '#E8D9B8',
+  icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> };
 
+function ExperienceCard({ exp }) {
+  const c = CAT_STYLES[exp.category] || CAT_DEFAULT;
   return (
-    <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
+    <div className="exp-card">
+      {/* Coloured header */}
+      <div className="exp-header" style={{ background: c.grad }}>
+        {/* Subtle pattern overlay */}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 70% 30%, rgba(255,255,255,0.12) 0%, transparent 60%)' }} />
+        <div className="exp-header-icon">{c.icon}</div>
+        <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', position: 'relative' }}>
           {exp.category}
         </span>
         {exp.price > 0 && (
-          <span style={{ fontWeight: 700, color: '#8B6914', fontSize: '0.88rem' }}>
+          <span style={{ position: 'absolute', top: 14, right: 14, fontSize: '0.78rem', fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.25)', padding: '3px 10px', borderRadius: 20 }}>
             LKR {(+exp.price).toLocaleString('en-LK')}
           </span>
         )}
+        {exp.family_friendly && (
+          <span style={{ position: 'absolute', top: 14, left: 14, fontSize: '0.68rem', fontWeight: 600, color: 'rgba(255,255,255,0.8)', background: 'rgba(255,255,255,0.15)', padding: '3px 8px', borderRadius: 20 }}>
+            Family friendly
+          </span>
+        )}
       </div>
-      <h3 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#2D1F0A', lineHeight: 1.3 }}>
-        {exp.name}
-      </h3>
-      {exp.duration && (
-        <div style={{ fontSize: '0.78rem', color: '#8A7A6A', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
-          {exp.duration}
-        </div>
-      )}
-      <p style={{ fontSize: '0.83rem', color: '#6B5544', lineHeight: 1.65, margin: 0, flex: 1 }}>
-        {exp.description.length > 100 ? exp.description.slice(0, 100) + '…' : exp.description}
-      </p>
+
+      {/* Body */}
+      <div className="exp-body">
+        <h3 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#2D1F0A', lineHeight: 1.35 }}>
+          {exp.name}
+        </h3>
+        {exp.duration && (
+          <div style={{ fontSize: '0.76rem', color: '#8A7A6A', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            {exp.duration}
+          </div>
+        )}
+        <p style={{ fontSize: '0.82rem', color: '#6B5544', lineHeight: 1.65, margin: '4px 0 0' }}>
+          {exp.description.length > 110 ? exp.description.slice(0, 110) + '…' : exp.description}
+        </p>
+      </div>
+
+      {/* Hover reveal link */}
+      <Link href="/experiences" className="exp-link">
+        Explore experience
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </Link>
     </div>
   );
 }
@@ -113,7 +141,6 @@ function ExperienceCard({ exp }) {
 export default async function HomePage() {
   const { rooms, experiences } = await getData();
   const previewRooms = rooms.slice(0, 3);
-  const previewExps  = experiences.slice(0, 4);
   const hasHeroImage = true; // set false if image not yet added
 
   return (
@@ -289,47 +316,115 @@ export default async function HomePage() {
       )}
 
       {/* ── Experiences ───────────────────────────────────────── */}
-      {previewExps.length > 0 && (
-        <section style={{ background: '#FFFFFF', padding: '100px 24px' }}>
-          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 52, flexWrap: 'wrap', gap: 20 }}>
-              <div>
-                <span className="section-label">Experiences</span>
-                <h2 className="section-title">Discover the Cultural Triangle</h2>
-                <div className="divider-accent" />
-              </div>
-              <Link href="/experiences" className="btn-outline-dark" style={{ flexShrink: 0 }}>
-                All experiences →
-              </Link>
+      {experiences.length > 0 && (
+        <section style={{ background: '#0F0A04' }}>
+          {/* Section header */}
+          <div style={{ maxWidth: 1200, margin: '0 auto', padding: '72px 24px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20 }}>
+            <div>
+              <span className="section-label" style={{ color: '#D4A843' }}>Around the Villa</span>
+              <h2 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 700, color: '#fff', margin: '8px 0 0', lineHeight: 1.2 }}>
+                Explore What's Nearby
+              </h2>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
-              {previewExps.map(e => <ExperienceCard key={e.id} exp={e} />)}
-            </div>
+            <Link href="/experiences" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: '0.86rem', fontWeight: 600, color: '#D4A843', textDecoration: 'none', flexShrink: 0, padding: '10px 0' }}>
+              View all experiences
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </Link>
           </div>
+
+          {/* Full-width slider */}
+          <ExperienceSlider experiences={experiences} />
+
+          <div style={{ height: 72, background: '#0F0A04' }} />
         </section>
       )}
 
-      {/* ── Why choose us ─────────────────────────────────────── */}
+      {/* ── Everything you need ───────────────────────────────── */}
       <section style={{ background: '#FAF7F2', padding: '100px 24px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+          <div style={{ textAlign: 'center', marginBottom: 60 }}>
             <span className="section-label">Why Leisureville</span>
             <h2 className="section-title">Everything you need</h2>
-            <div className="divider-accent" style={{ margin: '16px auto 0' }} />
+            <div className="divider-accent" style={{ margin: '16px auto 24px' }} />
+            <p style={{ fontSize: '1rem', color: '#8A7A6A', maxWidth: 480, margin: '0 auto', lineHeight: 1.7 }}>
+              A complete holiday bungalow experience — comfort, convenience,
+              and culture all in one place.
+            </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24 }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
             {[
-              { title: 'Air Conditioned', desc: 'All rooms have A/C for a comfortable stay in Sri Lanka\'s tropical climate' },
-              { title: 'Attached Bathrooms', desc: 'Each room has its own private en-suite bathroom' },
-              { title: 'Up to 4 Guests', desc: 'Each room comfortably accommodates up to 4 members' },
-              { title: 'Strategic Location', desc: 'Walk to Sigiriya, Pidurangala, Dambulla — all within easy reach' },
-              { title: 'Caretaker On-site', desc: 'In-house caretaker for meals, transfers, and local guidance' },
-              { title: 'Instant Booking', desc: 'Chat with our AI concierge and confirm your stay in minutes' },
-            ].map(({ title, desc }) => (
-              <div key={title} style={{ padding: '24px', background: '#fff', borderRadius: 14, border: '1px solid #E8DCC8', textAlign: 'center' }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#8B6914', margin: '0 auto 14px' }} />
-                <strong style={{ display: 'block', fontSize: '0.92rem', color: '#2D1F0A', fontWeight: 700, marginBottom: 8 }}>{title}</strong>
-                <p style={{ fontSize: '0.8rem', color: '#8A7A6A', margin: 0, lineHeight: 1.6 }}>{desc}</p>
+              {
+                title: 'Air Conditioned Rooms',
+                desc: 'All 3 bedrooms have air conditioning to keep you cool in Sri Lanka\'s tropical heat. Sleep comfortably all year round.',
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B6914" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 2v20M16 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93 4.93 19.07"/>
+                  </svg>
+                ),
+              },
+              {
+                title: '2 Double Beds Per Room',
+                desc: 'Each room has two double beds, comfortably sleeping up to 4 guests — ideal for families, couples, or groups.',
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B6914" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 4v16M22 4v16M2 8h20M2 16h20"/><rect x="5" y="8" width="6" height="8" rx="1"/><rect x="13" y="8" width="6" height="8" rx="1"/>
+                  </svg>
+                ),
+              },
+              {
+                title: 'Private Attached Bathrooms',
+                desc: 'Every room has its own en-suite bathroom with hot water — no sharing, full privacy for each group.',
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B6914" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12h16a1 1 0 0 1 1 1v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4v-3a1 1 0 0 1 1-1z"/><path d="M6 12V5a2 2 0 0 1 2-2h3v2.25"/>
+                  </svg>
+                ),
+              },
+              {
+                title: '5 Minutes to Sigiriya Rock',
+                desc: 'The iconic UNESCO World Heritage Sigiriya Rock Fortress is just a 5-minute drive from the bungalow.',
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B6914" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                  </svg>
+                ),
+              },
+              {
+                title: 'On-site Caretaker',
+                desc: 'Susantha, our resident caretaker, is always on hand for meals, local tips, transport arrangements, and anything you need.',
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B6914" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                  </svg>
+                ),
+              },
+              {
+                title: 'Up to 12 Guests Total',
+                desc: 'Book one room or the whole bungalow. With 3 rooms at 4 guests each, Leisureville fits families and groups of up to 12.',
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B6914" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                ),
+              },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} style={{
+                display: 'flex', gap: 20, padding: '28px 24px',
+                background: '#fff', borderRadius: 16, border: '1px solid #E8DCC8',
+                transition: 'box-shadow 0.2s, transform 0.2s',
+              }}
+                onMouseEnter={undefined}
+              >
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F5EDD9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {icon}
+                </div>
+                <div>
+                  <strong style={{ display: 'block', fontSize: '0.95rem', color: '#2D1F0A', fontWeight: 700, marginBottom: 8, lineHeight: 1.3 }}>{title}</strong>
+                  <p style={{ fontSize: '0.82rem', color: '#8A7A6A', margin: 0, lineHeight: 1.65 }}>{desc}</p>
+                </div>
               </div>
             ))}
           </div>

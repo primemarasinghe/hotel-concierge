@@ -19,7 +19,7 @@ ENV NEXT_PUBLIC_API_URL=""
 ENV NEXTAUTH_URL=http://localhost:3001
 ENV NEXTAUTH_SECRET=placeholder-replaced-at-runtime
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN mkdir -p public && npm run build
+RUN npm install sharp && mkdir -p public && npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -30,6 +30,7 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static   ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/sharp ./node_modules/sharp
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000

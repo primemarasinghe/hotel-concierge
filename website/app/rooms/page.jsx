@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { fetchRooms } from '../../lib/api';
 import AskConciergeButton from '../../components/AskConciergeButton';
 
@@ -111,9 +110,11 @@ function RoomCard({ room, index }) {
           </div>
         )}
 
-        <Link href="/book" className="btn-primary" style={{ display: 'inline-flex', alignSelf: 'flex-start', fontSize: '0.9rem' }}>
-          Book this room →
-        </Link>
+        <AskConciergeButton
+          message={`I'd like to book the ${room.name}`}
+          label="Book this room →"
+          style={{ alignSelf: 'flex-start', fontSize: '0.9rem' }}
+        />
       </div>
     </div>
   );
@@ -146,7 +147,7 @@ export default async function RoomsPage() {
           {rooms.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 0', color: '#8A7A6A' }}>
               <p style={{ fontSize: '1rem' }}>Unable to load rooms right now. Please try again later.</p>
-              <Link href="/book" className="btn-primary" style={{ marginTop: 20 }}>Chat with Siri to book</Link>
+              <AskConciergeButton message="I'd like to book a room" label="Chat with our concierge" style={{ marginTop: 20 }} />
             </div>
           ) : (
             rooms.map((r, i) => <RoomCard key={r.id} room={r} index={i} />)

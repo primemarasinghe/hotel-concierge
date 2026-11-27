@@ -26,11 +26,13 @@ async function request(path, { method = "GET", body, token, isJwt = false } = {}
 
 export const api = {
   property: (slug) => request(`/api/properties/${slug}`),
+  rooms: (slug) => request(`/api/properties/${slug}/rooms`),
   history: (slug, sid) => request(`/api/properties/${slug}/chat/${sid}`),
   sessionByEmail: (slug, email) =>
     request(`/api/properties/${slug}/chat/by-guest?email=${encodeURIComponent(email)}`),
   blockedDates: (slug) => request(`/api/properties/${slug}/blocked-dates`),
   fullyBookedDates: (slug) => request(`/api/properties/${slug}/fully-booked-dates`),
+  roomUnavailableDates: (slug, roomCode) => request(`/api/properties/${slug}/rooms/${roomCode}/unavailable-dates`),
 };
 
 export async function* chatStream(slug, sid, message, guestEmail = null) {

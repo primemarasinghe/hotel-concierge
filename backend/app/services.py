@@ -86,8 +86,13 @@ def validate_promo(db: Session, prop: Property, code: str, nights: int) -> Promo
 
 
 def room_type_by_code(db: Session, prop: Property, code: str) -> RoomType:
+    term = code.strip().lower()
     rt = db.scalar(select(RoomType).where(RoomType.property_id == prop.id,
-                                          func.lower(RoomType.code) == code.strip().lower()))
+                                          func.lower(RoomType.code) == term))
+    if not rt:
+        # Fall back to name lookup so the LLM can pass "Bedroom 2" instead of "BR2"
+        rt = db.scalar(select(RoomType).where(RoomType.property_id == prop.id,
+                                              func.lower(RoomType.name) == term))
     if not rt:
         codes = ", ".join(r.code for r in prop.room_types)
         raise BookingError(f"Unknown room type '{code}'. Valid codes: {codes}.")
@@ -386,8 +391,9 @@ def recommend_experiences(db: Session, prop: Property, interests: list[str] | No
         scored.append((len(words & hay), e))
     scored.sort(key=lambda x: (-x[0], x[1].price or 0))
     return [{"name": e.name, "category": e.category, "description": e.description,
-             "duration": e.duration, "price_per_person": e.price, "currency": prop.currency,
-             "family_friendly": e.family_friendly} for _, e in scored[:limit]]
+             "duration": e.duration, "family_friendly": e.family_friendly,
+             "note": "Independent nearby attraction — not booked through the hotel"
+             } for _, e in scored[:limit]]
 
 
 # ---------- service requests ----------

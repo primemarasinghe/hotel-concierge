@@ -135,7 +135,15 @@ function BookingCard({ booking, email, onDelete }) {
           </div>
         ) : (
           <div style={{ marginTop: 18 }}>
-            <MyBookingSignIn mode="chat" />
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('openChatWidget', { detail: { message: `I have a question about my booking ${booking.reference} (email: ${email})` } }))}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', border: '1.5px solid #E0D5C5', borderRadius: 10, background: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#6B4F0F', transition: 'border-color 0.15s, background 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#8B6914'; e.currentTarget.style.background = '#FAF7F2'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#E0D5C5'; e.currentTarget.style.background = '#fff'; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Need help with this booking?
+            </button>
           </div>
         )}
       </div>

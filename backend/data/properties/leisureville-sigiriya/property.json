@@ -30,19 +30,6 @@
   },
   "room_types": [
     {
-      "code": "MB",
-      "name": "Master Bedroom",
-      "description": "Spacious air-conditioned master bedroom with a large bed and attached bathroom. Big enough to comfortably accommodate up to 4 adults.",
-      "max_adults": 4,
-      "max_children": 2,
-      "beds": "1 large bed",
-      "size_sqm": 24,
-      "amenities": ["air conditioning", "Wi-Fi", "attached bathroom", "wardrobe", "ceiling fan"],
-      "base_rate": 10000,
-      "total_units": 1,
-      "image_url": "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80"
-    },
-    {
       "code": "BR2",
       "name": "Bedroom 2",
       "description": "Spacious air-conditioned bedroom with two twin beds and attached bathroom. Can comfortably accommodate up to 4 adults, ideal for groups.",

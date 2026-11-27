@@ -532,6 +532,23 @@ def guest_delete_booking(reference: str, body: GuestCancelIn, db: Session = Depe
     return {"deleted": True}
 
 
+@app.get("/api/properties/{slug}/rooms/{room_code}/unavailable-dates")
+def room_unavailable_dates(room_code: str, prop: Property = Depends(get_property), db: Session = Depends(get_db)):
+    """Return dates within the next 14 days where this specific room type has 0 units available."""
+    rt = db.scalar(select(RoomType).where(RoomType.property_id == prop.id, RoomType.code == room_code.upper()))
+    if not rt:
+        raise HTTPException(status_code=404, detail="Room type not found")
+    today = date.today()
+    unavailable = []
+    current = today
+    while current <= today + timedelta(days=13):
+        next_day = current + timedelta(days=1)
+        if svc.units_available(db, rt, current, next_day) == 0:
+            unavailable.append(current.isoformat())
+        current = next_day
+    return {"unavailable": unavailable}
+
+
 @app.get("/api/properties/{slug}/blocked-dates")
 def public_blocked_dates(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
     """Return property-wide blocked dates within the next 14 days for the guest calendar."""

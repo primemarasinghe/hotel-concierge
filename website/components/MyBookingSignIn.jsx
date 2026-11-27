@@ -9,7 +9,7 @@ export default function MyBookingSignIn({ mode = 'signin' }) {
         className="btn-primary"
         style={{ padding: '12px 28px', fontSize: '0.9rem' }}
       >
-        Chat with Siri to book →
+        Chat with our concierge to book →
       </button>
     );
   }

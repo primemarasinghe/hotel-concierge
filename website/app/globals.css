@@ -1274,16 +1274,17 @@ details[open].avail-unavail summary::before { content: "− "; }
 .quote-confirm-btn:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
 
 /* ---------- Guest details form card ---------- */
-.guest-form-card { align-self: flex-start; width: calc(100% - 48px); max-width: 300px; margin: 2px 0 2px 36px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+.guest-form-card { align-self: flex-start; width: calc(100% - 48px); max-width: 420px; margin: 2px 0 2px 36px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 12px; }
+.guest-form-card-inline { width: 100%; max-width: 100%; margin: 6px 0 0; }
 .guest-form-title { font: 600 0.82rem/1 var(--ui); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
-.guest-form-field { display: flex; flex-direction: column; gap: 3px; }
+.guest-form-field { display: flex; flex-direction: column; gap: 4px; }
 .guest-form-field label { font: 500 0.8rem/1 var(--ui); color: var(--fg); opacity: 0.75; }
-.guest-form-field input { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--fg); font: 400 0.88rem/1.3 var(--ui); outline: none; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
+.guest-form-field input { padding: 9px 11px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--fg); font: 400 0.88rem/1.3 var(--ui); outline: none; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
 .guest-form-field input:focus { border-color: var(--accent); }
 .guest-form-field input::placeholder { color: var(--muted); opacity: 0.6; }
 .guest-form-error { font: 400 0.75rem/1.2 var(--ui); color: #e05252; }
-.guest-form-submit { margin-top: 2px; padding: 9px 0; border-radius: 9px; border: none; background: var(--accent); color: #fff; font: 600 0.88rem/1 var(--ui); cursor: pointer; transition: background 0.15s; }
-.guest-form-submit:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
+.guest-form-submit { margin-top: 4px; width: 100%; padding: 11px 0; border-radius: 10px; border: none; background: var(--accent); color: #fff; font: 700 0.9rem/1 var(--ui); letter-spacing: 0.02em; cursor: pointer; transition: background 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+.guest-form-submit:hover { background: color-mix(in srgb, var(--accent) 85%, #000); box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 45%, transparent); }
 .guest-form-done { display: flex; align-items: center; gap: 7px; font: 500 0.85rem/1 var(--ui); color: var(--muted); padding: 10px 14px; }
 
 /* ---------- Date range picker ---------- */
@@ -3526,15 +3527,20 @@ details[open].avail-unavail summary::before { content: "− "; }
 .guest-form-card {
   align-self: flex-start;
   width: calc(100% - 48px);
-  max-width: 300px;
+  max-width: 420px;
   margin: 2px 0 2px 36px;
   background: var(--surface);
   border: 1.5px solid var(--line);
   border-radius: 14px;
-  padding: 14px 14px 12px;
+  padding: 16px 16px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+.guest-form-card-inline {
+  width: 100%;
+  max-width: 100%;
+  margin: 6px 0 0;
 }
 .guest-form-title {
   font: 600 0.82rem/1 var(--ui);
@@ -3546,7 +3552,7 @@ details[open].avail-unavail summary::before { content: "− "; }
 .guest-form-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .guest-form-field label {
   font: 500 0.8rem/1 var(--ui);
@@ -3554,7 +3560,7 @@ details[open].avail-unavail summary::before { content: "− "; }
   opacity: 0.75;
 }
 .guest-form-field input {
-  padding: 7px 10px;
+  padding: 9px 11px;
   border: 1.5px solid var(--line);
   border-radius: 8px;
   background: var(--bg);
@@ -3562,6 +3568,8 @@ details[open].avail-unavail summary::before { content: "− "; }
   font: 400 0.88rem/1.3 var(--ui);
   outline: none;
   transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
 }
 .guest-form-field input:focus { border-color: var(--accent); }
 .guest-form-field input::placeholder { color: var(--muted); opacity: 0.6; }
@@ -3570,17 +3578,20 @@ details[open].avail-unavail summary::before { content: "− "; }
   color: #e05252;
 }
 .guest-form-submit {
-  margin-top: 2px;
-  padding: 9px 0;
-  border-radius: 9px;
+  margin-top: 4px;
+  width: 100%;
+  padding: 11px 0;
+  border-radius: 10px;
   border: none;
   background: var(--accent);
   color: #fff;
-  font: 600 0.88rem/1 var(--ui);
+  font: 700 0.9rem/1 var(--ui);
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent);
 }
-.guest-form-submit:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
+.guest-form-submit:hover { background: color-mix(in srgb, var(--accent) 85%, #000); box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 45%, transparent); }
 .guest-form-done {
   display: flex;
   align-items: center;

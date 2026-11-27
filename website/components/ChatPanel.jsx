@@ -300,7 +300,7 @@ function TransferOptionsCard({ data, onSend }) {
   );
 }
 
-function GuestDetailsCard({ onSend, guestEmail = null }) {
+function GuestDetailsCard({ onSend, guestEmail = null, inline = false }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState(guestEmail || "");
   const [emailConfirm, setEmailConfirm] = useState(guestEmail || "");
@@ -339,7 +339,7 @@ function GuestDetailsCard({ onSend, guestEmail = null }) {
   }
 
   return (
-    <div className="guest-form-card">
+    <div className={`guest-form-card${inline ? " guest-form-card-inline" : ""}`}>
       <p className="guest-form-title">Your details</p>
       <div className="guest-form-field">
         <label htmlFor="gf-name">Full name</label>
@@ -398,7 +398,7 @@ export function EventCard({ event, onSend = () => {}, guestEmail = null }) {
     return <TransferOptionsCard data={d} onSend={onSend} />;
   }
   if (event.type === "guest_details_form") {
-    return <GuestDetailsCard onSend={onSend} guestEmail={guestEmail} />;
+    return <GuestDetailsCard inline onSend={onSend} guestEmail={guestEmail} />;
   }
 
   if (event.type === "booking_created" || event.type === "booking_modified") {
@@ -581,9 +581,6 @@ function DateRangePicker({ onSelect, onClose, blockedDates = [], fullyBookedDate
             ? `${fmtDate(start, { day: "numeric", month: "short" })} → select check-out`
             : `${fmtDate(start, { day: "numeric", month: "short" })} – ${fmtDate(end, { day: "numeric", month: "short" })}`}
         </span>
-        <button type="button" className="drp-close" onClick={onClose} aria-label="Close date picker">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
       </div>
     </div>
   );
@@ -666,10 +663,10 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState("");
   const [maximize, setMaximize] = useState(false);
-  const [pickerDismissedAtLength, setPickerDismissedAtLength] = useState(-1);
   const [historyCount, setHistoryCount] = useState(0);
   const [blockedDates,     setBlockedDates]     = useState([]);
   const [fullyBookedDates, setFullyBookedDates] = useState([]);
+  const [roomTypes,        setRoomTypes]        = useState([]);
   const [showHistory,  setShowHistory]  = useState(false);
   const [sessions,     setSessions]     = useState([]);
   const [streamContent, setStreamContent] = useState("");
@@ -693,12 +690,15 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   const inputRef = useRef(null);
 
   const needsDates = (() => {
-    if (busy || messages.length === 0 || messages.length === pickerDismissedAtLength) return false;
+    if (busy || messages.length === 0) return false;
     const last = messages[messages.length - 1];
     if (!last || last.role !== "assistant") return false;
     const t = last.content || "";
-    const enMatch = /check[- ]?in|check[- ]?out|arrival date|which dates?|what dates?|when.*you.*think|when.*are you|when.*would you|when.*you.*like|what.*dates|dates.*thinking|dates.*have in mind|how many nights|looking to book|book for|your stay|planning to stay|thinking of staying/i.test(t);
-    return enMatch;
+    const dateQuestion = /check[- ]?in|check[- ]?out|arrival date|which dates?|what dates?|when.*you.*think|when.*are you|when.*would you|when.*you.*like|what.*dates|dates.*thinking|dates.*have in mind|how many nights|planning to stay|thinking of staying/i.test(t);
+    // Question form (most common): must include ? to avoid triggering on date confirmation messages
+    if (t.includes("?")) return dateQuestion;
+    // Imperative form without ?: only trigger on unambiguous "please share/provide your dates" phrasing
+    return /\b(please\s+)?(share|provide|tell me|give me)\s+(your\s+)?(check[- ]?in|check[- ]?out|arrival|dates?)/i.test(t);
   })();
 
   const needsGuestForm = (() => {
@@ -706,6 +706,8 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
       if (m.role === "user" && /^I'd like to book the /.test(m.content || "")) {
+        // Initial message from rooms page — dates not yet collected; bot will trigger form via event
+        if (i === 0) return false;
         if (messages.slice(i + 1).some((m2) => m2.role === "user" && /^Name:/i.test(m2.content || ""))) return false;
         const inMsgs   = messages.slice(i).some((m2) => m2.events?.some((e) => e.type === "guest_details_form"));
         const inStream = streamEvents.some((e) => e.type === "guest_details_form");
@@ -739,11 +741,12 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
       setSid(id);
 
       try {
-        const [p, h, bd, fb] = await Promise.all([
+        const [p, h, bd, fb, rm] = await Promise.all([
           api.property(slug),
           api.history(slug, id).catch(() => ({ messages: [] })),
           api.blockedDates(slug).catch(() => ({ blocked: [] })),
           api.fullyBookedDates(slug).catch(() => ({ fully_booked: [] })),
+          api.rooms(slug).catch(() => []),
         ]);
         if (!live) return;
         setProp(p);
@@ -751,6 +754,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
         setHistoryCount(h.messages.length);
         setBlockedDates(bd.blocked || []);
         setFullyBookedDates(fb.fully_booked || []);
+        setRoomTypes(Array.isArray(rm) ? rm : []);
       } catch {
         if (live) setError("This property's assistant isn't available right now.");
       }
@@ -768,6 +772,21 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   useEffect(() => {
     if (!prop || !initialMessage || initialMsgSentRef.current) return;
     initialMsgSentRef.current = true;
+
+    // If the message names a specific room, fetch that room's unavailable dates
+    const roomMatch = initialMessage.match(/^I'd like to book the (.+)$/i);
+    if (roomMatch) {
+      const roomName = roomMatch[1].trim();
+      const rt = roomTypes.find(r => r.name.toLowerCase() === roomName.toLowerCase());
+      if (rt) {
+        api.roomUnavailableDates(slug, rt.code).then(d => {
+          if (d?.unavailable?.length) {
+            setFullyBookedDates(prev => [...new Set([...prev, ...d.unavailable])]);
+          }
+        }).catch(() => {});
+      }
+    }
+
     setTimeout(() => send(initialMessage), 350);
   }, [prop]); // eslint-disable-line
 
@@ -1170,7 +1189,6 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
           <div className="chat-inline-picker">
             <DateRangePicker
               onSelect={applyDates}
-              onClose={() => setPickerDismissedAtLength(messages.length)}
               blockedDates={blockedDates}
               fullyBookedDates={fullyBookedDates}
             />

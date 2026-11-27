@@ -13,9 +13,11 @@ export default function ChatWidget() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
-  const [open,      setOpen]      = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [open,       setOpen]      = useState(false);
+  const [voiceOpen,  setVoiceOpen] = useState(false);
   const [pendingMsg, setPendingMsg] = useState("");
+  const [chatKey,    setChatKey]   = useState(0);
+  const [startFresh, setStartFresh] = useState(false);
 
   // Redirect admin users to the admin panel immediately after login
   useEffect(() => {
@@ -39,7 +41,13 @@ export default function ChatWidget() {
   // Open on custom event (from "Book Now" or "Ask about this" buttons)
   useEffect(() => {
     const handler = (e) => {
-      setPendingMsg(e.detail?.message || "");
+      const msg = e.detail?.message || "";
+      setPendingMsg(msg);
+      if (msg) {
+        // Force a fresh session so the message doesn't land in an old conversation
+        setChatKey(k => k + 1);
+        setStartFresh(true);
+      }
       setOpen(true);
     };
     window.addEventListener('openChatWidget', handler);
@@ -152,12 +160,14 @@ export default function ChatWidget() {
           ) : (
             /* ── Chat panel ── */
             <ChatPanel
+              key={chatKey}
               slug={SLUG}
-              onClose={() => { setOpen(false); setPendingMsg(""); }}
+              onClose={() => { setOpen(false); setPendingMsg(""); setStartFresh(false); }}
               fill={false}
               onOpenVoice={() => { setOpen(false); setVoiceOpen(true); }}
               guestEmail={session?.user?.email ?? null}
               initialMessage={pendingMsg}
+              startFresh={startFresh}
             />
           )}
         </div>
