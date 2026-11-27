@@ -307,7 +307,6 @@ def public_experiences(prop: Property = Depends(get_property), db: Session = Dep
 class ChatIn(BaseModel):
     session_id: str = Field(min_length=32, max_length=64)
     message: str = Field(min_length=1, max_length=2000)
-    lang: str = Field("en", pattern="^(en|si|ta)$")
     guest_email: str | None = Field(None, max_length=200)
 
 
@@ -330,7 +329,7 @@ def chat(request: Request, body: ChatIn, background_tasks: BackgroundTasks,
 
     agent = ConciergeAgent(db, prop, conv)
     try:
-        reply = agent.run(body.message, lang=body.lang)
+        reply = agent.run(body.message)
     except Exception as e:  # LLM/network failure: don't lose the guest
         db.rollback()
         reply = ("Sorry, I'm having trouble right now. Please try again in a moment, or contact us at "
@@ -384,7 +383,7 @@ async def chat_stream(request: Request, body: ChatIn, background_tasks: Backgrou
     async def generate():
         reply_parts: list[str] = []
         try:
-            async for ev in agent.arun_stream(body.message, lang=body.lang):
+            async for ev in agent.arun_stream(body.message):
                 if ev["type"] == "token":
                     reply_parts.append(ev["content"])
                 yield f"data: {json.dumps(ev)}\n\n"

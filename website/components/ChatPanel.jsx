@@ -606,41 +606,7 @@ function UserAvatar() {
   );
 }
 
-const SI_RE = /[඀-෿]/;
-const TA_RE = /[஀-௿]/;
-const hasSinhala = (text) => SI_RE.test(text ?? "");
-const hasTamil   = (text) => TA_RE.test(text ?? "");
-const scriptClass = (text) =>
-  hasSinhala(text) ? " si-text" : hasTamil(text) ? " ta-text" : "";
-
-const SI_CHIPS = [
-  "කාමරයක් තිබේද?",
-  "ගාස්තු කොපමණද?",
-  "ගුවන්තොටුපළ ගමනාගමනය",
-  "ළඟ ඇති ආකර්ෂණ",
-];
-
-const TA_CHIPS = [
-  "அறை கிடைக்குமா?",
-  "விலை என்ன?",
-  "விமான நிலைய போக்குவரத்து",
-  "அருகிலுள்ள இடங்கள்",
-];
-
-function siGreeting(prop) {
-  return `ආයුබෝවන්! 🙏 මම ${prop.assistant_name}, ${prop.name} හි AI concierge. කාමර වෙන් කිරීම, ගාස්තු, ගුවන්තොටුපළ ගමනාගමනය සහ ළඟ ඇති ආකර්ෂණ ගැන ඔබට සහාය කළ හැකිය. කෙසේ ද?`;
-}
-
-function taGreeting(prop) {
-  return `வணக்கம்! 🙏 நான் ${prop.assistant_name}, ${prop.name}-இன் AI concierge. அறை முன்பதிவு, விலை விவரங்கள், விமான நிலைய போக்குவரத்து மற்றும் அருகிலுள்ள இடங்கள் பற்றி உதவ முடியும். எப்படி உதவட்டுமா?`;
-}
-
-const LANG_CYCLE = { en: "si", si: "en" };
-const LANG_LABEL = { en: "EN", si: "සිං" };
-const LANG_TITLE = {
-  en: "සිංහලෙන් — switch language",
-  si: "Switch to English",
-};
+const scriptClass = () => "";
 
 function HistoryPanel({ sessions, currentSid, onSelect, onNewChat, onDelete }) {
   const groups = groupByDate(sessions);
@@ -700,7 +666,6 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState("");
   const [maximize, setMaximize] = useState(false);
-  const [lang, setLang]         = useState("en");
   const [pickerDismissedAtLength, setPickerDismissedAtLength] = useState(-1);
   const [historyCount, setHistoryCount] = useState(0);
   const [blockedDates,     setBlockedDates]     = useState([]);
@@ -733,11 +698,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
     if (!last || last.role !== "assistant") return false;
     const t = last.content || "";
     const enMatch = /check[- ]?in|check[- ]?out|arrival date|which dates?|what dates?|when.*you.*think|when.*are you|when.*would you|when.*you.*like|what.*dates|dates.*thinking|dates.*have in mind|how many nights|looking to book|book for|your stay|planning to stay|thinking of staying/i.test(t);
-    // Sinhala: දිනය (date), ලඟාවෙන (arrival), රාත්‍රී/රාත්‍රි (nights), නවාතැන් (stay)
-    const siMatch = /දිනය|දිනයන්|ලඟාවෙන|රාත්‍රී|රාත්‍රි|නවාතැන්|ඇතුළත්|පිටවීම/.test(t);
-    // Tamil: தேதி (date), வருகை (arrival), புறப்பாடு (departure), இரவுகள் (nights)
-    const taMatch = /தேதி|தேதிகள்|வருகை|புறப்பாடு|இரவுகள்|தங்கும்/.test(t);
-    return enMatch || siMatch || taMatch;
+    return enMatch;
   })();
 
   const needsGuestForm = (() => {
@@ -949,7 +910,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
     let gotDone    = false;
 
     try {
-      for await (const ev of chatStream(slug, sid, msg, lang, guestEmail)) {
+      for await (const ev of chatStream(slug, sid, msg, guestEmail)) {
         if (ev.type === "token") {
           streamContentRef.current += ev.content;
           setStreamContent(streamContentRef.current);
@@ -1022,9 +983,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
   function applyDates(ci, co) {
     const nights = Math.round((new Date(co) - new Date(ci)) / 86400000);
     const dateStr = `${fmtDate(ci, { day: "numeric", month: "short" })} – ${fmtDate(co, { day: "numeric", month: "short" })} (${nights} night${nights !== 1 ? "s" : ""})`;
-    // Append a Sinhala/Tamil label so the backend doesn't mistake the English date as a language switch
-    const prefix = lang === "si" ? "තෝරාගත් දිනයන්: " : "";
-    send(prefix + dateStr);
+    send(dateStr);
   }
 
   function restart() {
@@ -1085,8 +1044,8 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
 
   const accent       = prop?.accent || "#2f5d3a";
   const initials     = (prop?.assistant_name || "C")[0];
-  const chips    = lang === "si" ? SI_CHIPS : (prop?.suggestions || []);
-  const greeting = prop ? (lang === "si" ? siGreeting(prop) : prop.greeting) : null;
+  const chips    = prop?.suggestions || [];
+  const greeting = prop ? prop.greeting : null;
 
   const panel = (
     <section
@@ -1106,17 +1065,6 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             {prop ? prop.name : "Loading…"}
           </span>
         </div>
-
-        {prop && (
-          <button
-            className={`lang-toggle${lang !== "en" ? ` lang-toggle-active lang-toggle-${lang}` : ""}`}
-            onClick={() => setLang(l => LANG_CYCLE[l])}
-            title={LANG_TITLE[lang]}
-            aria-label={LANG_TITLE[lang]}
-          >
-            {LANG_LABEL[lang]}
-          </button>
-        )}
 
         <button
           className={`icon-btn${showHistory ? " icon-btn-active" : ""}`}
@@ -1264,12 +1212,8 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
             rows={1}
             value={input}
             maxLength={2000}
-            placeholder={
-              lang === "si" ? "ලියන්න… (සිංහල හෝ ඉංග්‍රීසි)" :
-              "Ask about rooms, dates, transfers…"
-            }
+            placeholder="Ask about rooms, dates, transfers…"
             aria-label="Your message"
-            lang={hasSinhala(input) ? "si" : hasTamil(input) ? "ta" : undefined}
             onChange={(e) => { setInput(e.target.value); autoGrow(e.target); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }

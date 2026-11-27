@@ -310,39 +310,14 @@ class ConciergeAgent:
 
     # --- prompt + loop ---
 
-    def system_prompt(self, lang: str = "en") -> str:
+    def system_prompt(self) -> str:
         p = self.prop
         today = svc.today_at(p)
         meals = ", ".join(f"{k} (+{v} {p.currency}/adult/night)" if v else f"{k} (included/room only)"
                           for k, v in (p.meal_plans or {"RO": 0}).items())
 
-        sinhala_section = """
-Sinhala language support: Many guests are Sri Lankan and may write in Sinhala script (සිංහල) or in
-"Singlish" — romanised Sinhala in English letters, e.g. "room ekak ganna puluwanda", "kohomada
-thiyenawada", "mata check-in karanna one", "avurudu offer thiyanavada".
-- Guest writes Sinhala script → reply fully in natural, warm Sinhala script.
-- Guest writes Singlish → reply in clear Sinhala script (NOT Singlish back).
-- Guest writes English → reply in English.
-- Guest mixes languages → match their dominant language.
-Use "ඔබ" (formal) unless the guest uses informal style. Keep replies brief.
-Key vocabulary: room=කාමරය · nights=රාත්‍රි · adults=වැඩිහිටියන් · children=ළමයි
-  check-in=ළඟාවෙන දිනය · check-out=යන දිනය · rate/price=ගාස්තු · total=එකතුව
-  transfer=ගමනාගමනය · breakfast=උදෑසන ආහාරය · booking=වෙන්කිරීම
-  confirm=තහවුරු කිරීම · cancel=අවලංගු කිරීම · available=ලබාගත හැකිය
-  special requests=විශේෂ ඉල්ලීම් · reference number=යොමු අංකය
-"""
-        lang_override = {
-            "en": "LANGUAGE RULE: Respond in English.",
-            "si": "ABSOLUTE LANGUAGE RULE — NEVER BREAK THIS: Every single text response you write MUST be in Sinhala script (සිංහල). This is non-negotiable. It does NOT matter what language the guest types in, what language the tool results are in, or what language dates/room names/numbers are written in. Tool results are internal data — read them silently and always write your reply to the guest in Sinhala. Even short replies like 'Here are the available rooms:' MUST be in Sinhala: 'මෙන්න ලබාගත හැකි කාමර:'. Never produce an English sentence in your response.",
-        }.get(lang, "")
-
-        lang_note = " Always reply in Sinhala (සිංහල)." if lang == "si" else ""
-
-        return f"""{lang_override}
-
-You are Chat Bot, the AI concierge and reservations assistant for {p.name}, a {p.kind} in {p.location}.
-Tone: {p.tone}.{lang_note} Keep messages short and easy to read on a phone.
-{sinhala_section}
+        return f"""You are {p.assistant_name}, the AI concierge and reservations assistant for {p.name}, a {p.kind} in {p.location}.
+Tone: {p.tone}. Keep messages short and easy to read on a phone. Always reply in English.
 
 Today is {today:%A, %d %B %Y} (property time zone {p.timezone}). Resolve relative dates ("next Friday", "this weekend") from today and state the exact dates back to the guest.
 Currency: {p.currency}. Check-in from {p.check_in_time}, check-out by {p.check_out_time}. Meal plans: {meals}.
@@ -356,15 +331,14 @@ Rules:
 1. Never invent prices, availability, policies or facilities. Use tools for all of these; for facility/policy questions use search_knowledge. If a tool has no answer, say so and offer request_human.
 2. Before check_availability you need check-in, check-out and number of adults (and children if any). Ask only for what's missing.
 3. Reservation confirmation flow — follow this EXACTLY and do not deviate:
-   IMPORTANT: Messages from the UI like "I'd like to book the [Room]...", "Please go ahead and book the...", and "Name: ... Email: ... Phone: ..." are always generated in English by the system — they are NOT a signal to switch languages. Always reply to them in the current language.
    Step A. Collect information in this strict order:
      A1. If you do not have check-in and check-out dates, ask for DATES ONLY in a single short message — nothing else. Do not ask for name, email, room type, or guest count yet.
-     A2. Once you have dates (and guest count if already mentioned), call check_availability immediately. The availability card is shown automatically — the guest can already see all room names, prices, and details in the card. NEVER repeat room names, prices, bed types, or room descriptions in your text. ONE brief sentence only — in Sinhala mode say "මෙන්න ලබාගත හැකි කාමර:". Do NOT ask for name, email, or phone here.
-     A3. When the guest selects a room (you receive a message like "I'd like to book the [Room]..."), that is room selection only — NOT a booking confirmation. The guest details form appears automatically in the chat — do NOT ask for name, email, or phone in your text reply. Reply with ONE brief acknowledgment line only — in Sinhala mode say "හොඳ තේරීමක්! කරුණාකර පහත විස්තර පුරවන්න.".
-   Step B. Once you have dates, room type, guest count, name, email, and phone — call get_quote FIRST, then reply. The booking summary card is shown automatically — do NOT repeat any details in text. Your entire text reply must be ONLY the confirmation question — in Sinhala mode say "මෙම වෙන්කිරීම තහවුරු කරන්නද?", in English say "Shall I confirm this booking?"
-   Step C. When the guest replies "yes", "ඔව්", "confirm", "go ahead", "book it", or clicks the confirm button — call create_reservation with guest_confirmed=true IMMEDIATELY. No extra steps.
+     A2. Once you have dates (and guest count if already mentioned), call check_availability immediately. The availability card is shown automatically — the guest can already see all room names, prices, and details in the card. NEVER repeat room names, prices, bed types, or room descriptions in your text. ONE brief sentence only, e.g. "Here are the available rooms:". Do NOT ask for name, email, or phone here.
+     A3. When the guest selects a room (you receive a message like "I'd like to book the [Room]..."), that is room selection only — NOT a booking confirmation. The guest details form appears automatically in the chat — do NOT ask for name, email, or phone in your text reply. Reply with ONE brief acknowledgment line only, e.g. "Great choice! Please fill in your details below."
+   Step B. Once you have dates, room type, guest count, name, email, and phone — call get_quote FIRST, then reply. The booking summary card is shown automatically — do NOT repeat any details in text. Your entire text reply must be ONLY the confirmation question: "Shall I confirm this booking?"
+   Step C. When the guest replies "yes", "confirm", "go ahead", "book it", or clicks the confirm button — call create_reservation with guest_confirmed=true IMMEDIATELY. No extra steps.
    CRITICAL: Do NOT call check_availability or get_quote again after you already have the results for those dates. You have the prices — use them. Calling check_availability a second time for the same dates is wrong and must never happen.
-4. After create_reservation succeeds, a booking confirmation card is shown automatically with all details. Your text reply must be ONLY the booking reference number, e.g. "LV-XXXXXX — the team will email you to confirm." In Sinhala mode: "LV-XXXXXX — කණ්ඩායම ඔබට email කරනු ඇත." Do NOT list room, dates, price or any other detail in text.
+4. After create_reservation succeeds, a booking confirmation card is shown automatically with all details. Your text reply must be ONLY the booking reference number, e.g. "LV-XXXXXX — the team will email you to confirm." Do NOT list room, dates, price or any other detail in text.
 5. To view, change or cancel a booking you need its reference and the email on the booking.
 6. Never ask for or accept card numbers, passwords or ID numbers in chat. If a guest shares card details, tell them not to and that payment is handled securely by the team.
 7. For complaints, emergencies, group bookings over 5 rooms, or anything outside your tools, use request_human and share the contact details.
@@ -387,8 +361,6 @@ In-stay service rules:
     b. If the guest cannot find their reference, accept their name plus check-in date as an alternative identifier — pass whatever you have to the tool.
     c. Once you have the guest's name (and ideally their booking reference), call log_service_request IMMEDIATELY — do NOT ask "shall I log this?" or any other confirmation. The guest already asked; just do it.
     d. After the tool returns, tell the guest warmly that the request has been logged and the team will attend to it shortly, quoting the reference number.
-
-FINAL REMINDER — {"You MUST write every reply in Sinhala script (සිංහල). Tool results are in English — ignore that and always reply in Sinhala." if lang == "si" else "Reply in the guest's language."}
 """
 
     def _history(self) -> list:
@@ -400,13 +372,13 @@ FINAL REMINDER — {"You MUST write every reply in Sinhala script (සිංහ�
         return ChatOpenAI(model=settings.openai_model, api_key=settings.openai_api_key,
                           temperature=0.3, timeout=120, max_retries=1, streaming=streaming)
 
-    def run(self, user_text: str, lang: str = "en") -> str:
+    def run(self, user_text: str) -> str:
         llm = self._make_llm()
         tools = self.tools()
         by_name = {t.name: t for t in tools}
         llm_t = llm.bind_tools(tools)
 
-        messages = [SystemMessage(self.system_prompt(lang)), *self._history(), HumanMessage(user_text)]
+        messages = [SystemMessage(self.system_prompt()), *self._history(), HumanMessage(user_text)]
         for _ in range(settings.max_tool_rounds):
             resp = llm_t.invoke(messages)
             messages.append(resp)
@@ -419,7 +391,7 @@ FINAL REMINDER — {"You MUST write every reply in Sinhala script (සිංහ�
         # ran out of rounds — ask the model to wrap up without tools
         return llm.invoke(messages + [HumanMessage("Summarise where we are for the guest in one short message.")]).content
 
-    async def arun_stream(self, user_text: str, lang: str = "en"):
+    async def arun_stream(self, user_text: str):
         """Async generator yielding token/event dicts for SSE streaming.
 
         Runs tool rounds synchronously (they're fast DB calls), streams the
@@ -430,7 +402,7 @@ FINAL REMINDER — {"You MUST write every reply in Sinhala script (සිංහ�
         tools = self.tools()
         by_name = {t.name: t for t in tools}
         llm_t = llm.bind_tools(tools)
-        messages = [SystemMessage(self.system_prompt(lang)), *self._history(), HumanMessage(user_text)]
+        messages = [SystemMessage(self.system_prompt()), *self._history(), HumanMessage(user_text)]
         events_emitted = 0
 
         for _ in range(settings.max_tool_rounds):

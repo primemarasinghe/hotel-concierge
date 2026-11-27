@@ -33,11 +33,11 @@ export const api = {
   fullyBookedDates: (slug) => request(`/api/properties/${slug}/fully-booked-dates`),
 };
 
-export async function* chatStream(slug, sid, message, lang = "en", guestEmail = null) {
+export async function* chatStream(slug, sid, message, guestEmail = null) {
   const res = await fetch(`/api/properties/${slug}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sid, message, lang, ...(guestEmail ? { guest_email: guestEmail } : {}) }),
+    body: JSON.stringify({ session_id: sid, message, ...(guestEmail ? { guest_email: guestEmail } : {}) }),
   });
 
   if (!res.ok) {
