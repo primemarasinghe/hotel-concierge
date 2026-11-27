@@ -22,7 +22,7 @@ from .config import settings
 from .db import SessionLocal, get_db, init_db
 from .models import (BlockedDate, Booking, Conversation, Experience, KnowledgeChunk, Message, PromoCode,
                      Property, RoomType, SeasonalRate, ServiceRequest, TransferOption, TransferRequest)
-from .ratelimit import ip_limiter, login_limiter, lookup_limiter, session_limiter
+from .ratelimit import ip_limiter, login_limiter, lookup_limiter, session_limiter, view_limiter
 
 try:
     from google.oauth2 import id_token as _google_id_token
@@ -292,7 +292,13 @@ def public_rooms(prop: Property = Depends(get_property), db: Session = Depends(g
 
 @app.get("/api/properties/{slug}/experiences")
 def public_experiences(prop: Property = Depends(get_property), db: Session = Depends(get_db)):
-    return [_experience_out(e) for e in db.scalars(
+    def _public(e: Experience) -> dict:
+        return {
+            "id": e.id, "name": e.name, "category": e.category,
+            "description": e.description, "duration": e.duration,
+            "tags": e.tags or [], "family_friendly": e.family_friendly,
+        }
+    return [_public(e) for e in db.scalars(
         select(Experience).where(Experience.property_id == prop.id)
         .order_by(Experience.category, Experience.name)
     )]
@@ -451,12 +457,20 @@ def _booking_public(b: Booking, prop: Property) -> dict:
 
 @app.get("/api/booking/by-guest")
 def bookings_by_guest(request: Request, email: str, db: Session = Depends(get_db)):
-    ok, retry = lookup_limiter.check(_client_ip(request))
+    ok, retry = view_limiter.check(_client_ip(request))
     if not ok:
         raise HTTPException(429, "Too many requests", headers={"Retry-After": str(retry)})
     email = email.lower().strip()
+    from sqlalchemy import case as sql_case
+    status_order = sql_case(
+        (Booking.status == "pending", 0),
+        (Booking.status == "confirmed", 1),
+        (Booking.status == "checked_in", 2),
+        else_=3,
+    )
     bookings = db.scalars(
-        select(Booking).where(Booking.email == email).order_by(Booking.check_in.desc())
+        select(Booking).where(Booking.email == email)
+        .order_by(status_order, Booking.check_in.desc())
     ).all()
     results = []
     for b in bookings:
@@ -503,6 +517,20 @@ def guest_cancel_booking(reference: str, body: GuestCancelIn,
     out = svc.cancel_booking(db, prop, b)
     background_tasks.add_task(em.booking_cancelled, bd, pd)
     return out
+
+
+@app.delete("/api/booking/{reference}")
+def guest_delete_booking(reference: str, body: GuestCancelIn, db: Session = Depends(get_db)):
+    b = db.scalar(select(Booking).where(
+        func.upper(Booking.reference) == reference.strip().upper()
+    ))
+    if not b or b.email != body.email.strip().lower():
+        raise HTTPException(404, "No booking found with that reference and email address.")
+    if b.status != "cancelled":
+        raise HTTPException(400, "Only cancelled bookings can be deleted.")
+    db.delete(b)
+    db.commit()
+    return {"deleted": True}
 
 
 @app.get("/api/properties/{slug}/blocked-dates")

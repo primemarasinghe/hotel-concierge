@@ -30,10 +30,26 @@ function StatusPill({ status }) {
   );
 }
 
-function BookingCard({ booking }) {
+function BookingCard({ booking, email, onDelete }) {
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const nights = booking.nights ?? Math.round((new Date(booking.check_out) - new Date(booking.check_in)) / 86400000);
   const roomName = booking.room || booking.room_name || '—';
   const total    = booking.total ?? booking.total_price;
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/booking/${booking.reference}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) { onDelete(booking.reference); return; }
+    } catch {}
+    setDeleting(false);
+    setConfirmDelete(false);
+  }
 
   return (
     <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E8DCC8', overflow: 'hidden', boxShadow: '0 2px 12px rgba(45,31,10,0.06)' }}>
@@ -87,7 +103,37 @@ function BookingCard({ booking }) {
           </div>
         )}
 
-        {booking.status !== 'cancelled' && (
+        {booking.status === 'cancelled' ? (
+          <div style={{ marginTop: 18 }}>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', border: '1.5px solid #FCA5A5', borderRadius: 8, background: '#FFF5F5', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: '#991B1B' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                Remove from list
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#FEF2F2', borderRadius: 10, border: '1px solid #FCA5A5' }}>
+                <span style={{ fontSize: '0.82rem', color: '#7F1D1D', flex: 1 }}>Remove this cancelled booking?</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{ padding: '6px 14px', background: '#DC2626', border: 'none', borderRadius: 7, fontSize: '0.8rem', fontWeight: 700, color: '#fff', cursor: deleting ? 'default' : 'pointer', opacity: deleting ? 0.7 : 1 }}
+                >
+                  {deleting ? 'Removing…' : 'Yes, remove'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  style={{ padding: '6px 14px', background: '#fff', border: '1px solid #E0D5C5', borderRadius: 7, fontSize: '0.8rem', fontWeight: 600, color: '#6B4F0F', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
           <div style={{ marginTop: 18 }}>
             <MyBookingSignIn mode="chat" />
           </div>
@@ -97,7 +143,7 @@ function BookingCard({ booking }) {
   );
 }
 
-const POLL_INTERVAL = 15000;
+const POLL_INTERVAL = 60000;
 
 export default function MyBookingList({ email }) {
   const [bookings, setBookings] = useState(null);
@@ -140,7 +186,7 @@ export default function MyBookingList({ email }) {
         </div>
         <h2 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: '1.4rem', fontWeight: 700, color: '#2D1F0A', margin: '0 0 10px' }}>No bookings yet</h2>
         <p style={{ fontSize: '0.9rem', color: '#8A7A6A', lineHeight: 1.7, margin: '0 0 28px' }}>
-          You haven't made any reservations with us yet. Chat with Siri to check availability and book your stay.
+          You haven't made any reservations with us yet. Chat with our concierge to check availability and book your stay.
         </p>
         <MyBookingSignIn mode="chat" />
       </div>
@@ -166,7 +212,14 @@ export default function MyBookingList({ email }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {bookings.map(b => <BookingCard key={b.reference} booking={b} />)}
+        {bookings.map(b => (
+          <BookingCard
+            key={b.reference}
+            booking={b}
+            email={email}
+            onDelete={(ref) => setBookings(prev => prev.filter(x => x.reference !== ref))}
+          />
+        ))}
       </div>
     </div>
   );
