@@ -19,15 +19,15 @@ async function apiFetch(path, opts = {}) {
 }
 
 export async function fetchProperty() {
-  return apiFetch(`/api/properties/${SLUG}`, { next: { revalidate: 3600 } });
+  return apiFetch(`/api/properties/${SLUG}`, { cache: 'no-store' });
 }
 
 export async function fetchRooms() {
-  return apiFetch(`/api/properties/${SLUG}/rooms`, { next: { revalidate: 3600 } });
+  return apiFetch(`/api/properties/${SLUG}/rooms`, { cache: 'no-store' });
 }
 
 export async function fetchExperiences() {
-  return apiFetch(`/api/properties/${SLUG}/experiences`, { next: { revalidate: 3600 } });
+  return apiFetch(`/api/properties/${SLUG}/experiences`, { cache: 'no-store' });
 }
 
 export async function lookupBooking(reference, email) {
@@ -44,7 +44,7 @@ export async function* streamChat(sessionId, message) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, message, lang: 'en' }),
+    body: JSON.stringify({ session_id: sessionId, message }),
   });
 
   if (!res.ok) {
