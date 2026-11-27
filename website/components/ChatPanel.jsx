@@ -357,14 +357,16 @@ function GuestDetailsCard({ onSend, guestEmail = null }) {
           placeholder="you@example.com" />
         {errors.email && <span className="guest-form-error">{errors.email}</span>}
       </div>
-      <div className="guest-form-field">
-        <label htmlFor="gf-email-confirm">Confirm email</label>
-        <input id="gf-email-confirm" type="email" autoComplete="off" value={emailConfirm}
-          onChange={(e) => setEmailConfirm(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="Re-enter your email" />
-        {errors.emailConfirm && <span className="guest-form-error">{errors.emailConfirm}</span>}
-      </div>
+      {!guestEmail && (
+        <div className="guest-form-field">
+          <label htmlFor="gf-email-confirm">Confirm email</label>
+          <input id="gf-email-confirm" type="email" autoComplete="off" value={emailConfirm}
+            onChange={(e) => setEmailConfirm(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            placeholder="Re-enter your email" />
+          {errors.emailConfirm && <span className="guest-form-error">{errors.emailConfirm}</span>}
+        </div>
+      )}
       <div className="guest-form-field">
         <label htmlFor="gf-phone">Phone number</label>
         <input id="gf-phone" type="tel" autoComplete="tel" value={phone}
@@ -1227,7 +1229,7 @@ export default function ChatPanel({ slug, onClose, fill = false, initialMessage 
           </div>
         )}
 
-        {needsGuestForm && <GuestDetailsCard onSend={send} />}
+        {needsGuestForm && <GuestDetailsCard onSend={send} guestEmail={guestEmail} />}
       </div>
 
       {error && <p className="chat-error" role="alert">{error}</p>}
